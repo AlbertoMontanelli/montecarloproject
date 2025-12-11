@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "montecarloproject" 
+version = "0.1.0"
+description = "Montecarlo simulation for a beam of pions through a fixed plastic beam"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Alberto Montanelli", email = "a.montanelli@studenti.unipi.it" }
+]
+dependencies = [
+  "numpy",
+  "loguru",
+  "scipy",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5"]
+docs = [
+  "sphinx>=7.0",
+  "myst-parser>=2.0",
+  "sphinxawesome-theme>=5.0",
+  "sphinx-autodoc-typehints>=2.1"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 78
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "PL", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
