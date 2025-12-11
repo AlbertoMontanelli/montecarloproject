@@ -29,12 +29,13 @@ docs = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
 
 [tool.ruff]
 line-length = 78
 indent-width = 4
+exclude = ["docs/", "build/", "dist/", ".venv/", "env/", ".git/"]
+src = ["src"]
 
 [tool.ruff.format]
 quote-style = "double"
