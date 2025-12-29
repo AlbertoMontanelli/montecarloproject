@@ -24,8 +24,38 @@ This is a counting-level model. No photon transport or detector effects
 are included at this stage.
 """
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
+from scipy.constants import N_A as AVOGADRO
+from scipy.stats import chi2
+
+# Update matplotlib.pyplot parameters.
+plt.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans"],
+        "font.size": 16,
+        "axes.titlesize": 18,
+        "axes.labelsize": 16,
+        "legend.fontsize": 16,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+    }
+)
+
+
+def _dir_path_finder(data):
+    """Create and return the directory path for saving files."""
+    base_dir = Path(__file__).resolve().parent
+    if data:
+        dir = base_dir / "data"
+    else:
+        dir = base_dir / "plots"
+    dir.mkdir(exist_ok=True)
+    return dir
 
 
 class Physics:
@@ -37,13 +67,12 @@ class Physics:
     SIGMA_ETA_CM2 = 0.33e-30
 
     # --- Material properties ---
-    AVOGADRO = 6.02214076e23
     DENSITY_G_CM3 = 0.93
     MOLAR_MASS = 16.0
     NR_PROTONS = 2.0
 
     @staticmethod
-    def mean_free_path_cm():
+    def lambda_cm():
         """
         Compute the mean free path lambda in the target material.
 
@@ -54,7 +83,7 @@ class Physics:
         """
         return Physics.MOLAR_MASS / (
             Physics.NR_PROTONS
-            * Physics.AVOGADRO
+            * AVOGADRO
             * Physics.DENSITY_G_CM3
             * Physics.SIGMA_TOT_CM2
         )
@@ -79,7 +108,7 @@ class Physics:
         }
 
 
-def sample_depth_from_uniform(rng, size):
+def sample_depth(rng, size):
     """
     Sample first interaction depth using inverse CDF.
 
@@ -97,13 +126,13 @@ def sample_depth_from_uniform(rng, size):
     """
     u = rng.random(size)
     u = np.clip(u, 1e-15, 1.0)  # avoid log(0)
-    x_cm = -Physics.mean_free_path_cm() * np.log(u)
+    x_cm = -Physics.lambda_cm() * np.log(u)
     return x_cm
 
 
-def expected_acceptance_prob(L_cm):
+def expected_prob(L_cm):
     """
-    Compute the expected probability to have an interaction inside the target.
+    Compute the expected probability to have the first interaction.
 
     Parameters
     ----------
@@ -115,7 +144,7 @@ def expected_acceptance_prob(L_cm):
     p_acc : float
         Probability of acceptance.
     """
-    return 1.0 - np.exp(-L_cm / Physics.mean_free_path_cm())
+    return 1.0 - np.exp(-L_cm / Physics.lambda_cm())
 
 
 def sample_channels(rng, n):
@@ -134,7 +163,7 @@ def sample_channels(rng, n):
     channels : numpy.ndarray
         Array of channel labels of length n.
     """
-    labels = np.array(list(Physics.channel_probabilities().keys()))
+    labels = list(Physics.channel_probabilities().keys())
     p = np.array(
         [Physics.channel_probabilities()[k] for k in labels], dtype=float
     )
@@ -165,25 +194,18 @@ def run_length_scan(rng, lengths_cm, n_events):
 
     accepted_mc = np.zeros(nL, dtype=int)
     rejected_mc = np.zeros(nL, dtype=int)
-    accepted_exp = np.zeros(nL, dtype=float)
 
     pi0_mc = np.zeros(nL, dtype=int)
     eta_mc = np.zeros(nL, dtype=int)
     other_mc = np.zeros(nL, dtype=int)
 
-    p_acc_exp = np.zeros(nL, dtype=float)
-
     for i, L_cm in enumerate(lengths_cm):
-        x = sample_depth_from_uniform(rng, size=n_events)
+        x = sample_depth(rng, size=n_events)
         mask_acc = x < L_cm
 
         n_acc = int(mask_acc.sum())
         accepted_mc[i] = n_acc
         rejected_mc[i] = n_events - n_acc
-
-        p_acc = expected_acceptance_prob(L_cm)
-        p_acc_exp[i] = p_acc
-        accepted_exp[i] = n_events * p_acc
 
         channels = sample_channels(rng, n=n_acc)
         pi0_mc[i] = int(np.sum(channels == "pi0n"))
@@ -191,12 +213,10 @@ def run_length_scan(rng, lengths_cm, n_events):
         other_mc[i] = int(np.sum(channels == "other"))
 
     results = {
-        "lambda_cm": Physics.mean_free_path_cm(),
+        "lambda_cm": Physics.lambda_cm(),
         "L_cm": lengths_cm,
         "accepted_mc": accepted_mc,
         "rejected_mc": rejected_mc,
-        "accepted_exp": accepted_exp,
-        "p_acc_exp": p_acc_exp,
         "pi0_mc": pi0_mc,
         "eta_mc": eta_mc,
         "other_mc": other_mc,
@@ -215,68 +235,177 @@ def plot_accepted_mc_vs_expected(results, n_events):
     n_events : int
         Number of trials per target length.
     """
+    lam = Physics.lambda_cm()
     L = results["L_cm"]
     acc_mc = results["accepted_mc"]
-    acc_exp = results["accepted_exp"]
 
     p_mc = acc_mc / n_events
     err_bin = np.sqrt(n_events * p_mc * (1.0 - p_mc))
 
-    plt.figure(figsize=(12, 5))
+    plot_dir = _dir_path_finder(data=False)
+    filename = plot_dir / "accepted_counts_mc_vs_expected.pdf"
+    plt.figure(figsize=(12, 5), dpi=1200)
     plt.errorbar(
         L,
         acc_mc,
         yerr=err_bin,
         fmt="o",
-        label="Accepted (MC, binomial error)",
+        label="MC interaction counts - binomial errors",
+        markersize=3,
+        elinewidth=1,
+        capsize=4,
+        capthick=1,
     )
-    plt.plot(L, acc_exp, label="Accepted (expected)")
-    plt.xlabel("Target length L (cm)")
-    plt.ylabel("Accepted events")
-    plt.title("Accepted counts: MC vs expectation")
-    plt.legend()
+    x = np.linspace(0, L.max(), 1000)
+    plt.plot(
+        x,
+        n_events * expected_prob(x),
+        label=(r"Interaction counts expected: $1-e^{-\frac{L}{\lambda}}$"),
+    )
+
+    ax = plt.gca()
+    minor = np.array([0.1])
+    major = np.arange(0.5, 6, 0.5)
+    xticks = np.concatenate([minor, major]) * lam
+    ax.set_xticks(xticks)
+    labels = [rf"${m:g}\lambda$" for m in np.concatenate([minor, major])]
+    ax.set_xticklabels(labels)
+    ax.set_xlim(0, 5.2 * lam)
+    ax.set_xlabel(r"Target length $L$ in units of $\lambda$")
+
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$\lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = 10^7$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+
+    plt.ylabel("Events")
+    plt.yscale("log")
+    plt.title("First interaction counts")
+    plt.grid()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(filename, dpi=1200)
+    plt.close()
 
 
-def plot_rare_channels(results, show_accepted_trend=True):
+def poisson_garwood_interval(n, cl=0.68):
     """
-    Plot rare channels (pi0, eta) with Poisson errors.
+    Garwood confidence interval for Poisson mean mu, given observed n.
+
+    Parameters
+    ----------
+    n : array-like or scalar
+        Observed counts (>=0).
+    cl : float
+        Confidence level, e.g. 0.68 or 0.90.
+
+    Returns
+    -------
+    low, up : np.ndarray
+        Lower and upper limits for the Poisson mean mu.
+    """
+    n = np.asarray(n, dtype=float)
+    if np.any(n < 0):
+        raise ValueError("Poisson counts must be >= 0.")
+    alpha = 1.0 - cl
+
+    low = np.zeros_like(n)
+    up = np.zeros_like(n)
+
+    # lower bound defined only for n>0
+    mask = n > 0
+    low[mask] = 0.5 * chi2.ppf(alpha / 2.0, 2.0 * n[mask])
+
+    # upper bound defined for all n, including n=0
+    up = 0.5 * chi2.ppf(1.0 - alpha / 2.0, 2.0 * (n + 1.0))
+
+    return low, up
+
+
+def plot_rare_channels(results, cl=0.68):
+    """
+    Plot rare channels (pi0, eta) with Garwood confidence intervals.
 
     Parameters
     ----------
     results : dict
         Output of run_length_scan.
-    show_accepted_trend : bool
-        If True, also plot a scaled accepted trend for visual reference.
+    cl : float
+        Confidence level for Garwood interval (e.g. 0.68 or 0.90).
     """
+    lam = Physics.lambda_cm()
     L = results["L_cm"]
     pi0 = results["pi0_mc"].astype(float)
     eta = results["eta_mc"].astype(float)
 
-    err_pi0 = np.sqrt(pi0)
-    err_eta = np.sqrt(eta)
+    # Garwood intervals for mean mu, given observed counts
+    pi0_low, pi0_up = poisson_garwood_interval(pi0, cl=cl)
+    eta_low, eta_up = poisson_garwood_interval(eta, cl=cl)
 
+    # Convert to asymmetric error bars around the observed count
+    pi0_yerr = np.vstack([pi0 - pi0_low, pi0_up - pi0])
+    eta_yerr = np.vstack([eta - eta_low, eta_up - eta])
+
+    plot_dir = _dir_path_finder(data=False)
+    filename = plot_dir / "rare_channels.pdf"
     plt.figure(figsize=(12, 5))
     plt.errorbar(
-        L, pi0, yerr=err_pi0, fmt="o", label="pi0n (MC, Poisson error)"
+        L,
+        pi0,
+        yerr=pi0_yerr,
+        fmt="o",
+        markersize=4,
+        capsize=2,
+        elinewidth=1,
+        label=rf"$\pi^0n$ - {int(cl * 100)}% CL",
     )
     plt.errorbar(
-        L, eta, yerr=err_eta, fmt="o", label="etan_2g (MC, Poisson error)"
+        L,
+        eta,
+        yerr=eta_yerr,
+        fmt="o",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
+        label=rf"$\eta n \rightarrow 2\gamma$ - {int(cl * 100)}% CL",
     )
 
-    if show_accepted_trend:
-        acc = results["accepted_mc"].astype(float)
-        denom = max(pi0.max(), eta.max(), 1.0)
-        scale = max(acc.max(), 1.0) / denom
-        plt.plot(L, acc / scale, label=f"Accepted scaled (÷{scale:.1f})")
-
-    plt.xlabel("Target length L (cm)")
+    ax = plt.gca()
+    minor = np.array([0.1])
+    major = np.arange(0.5, 6, 0.5)
+    xticks = np.concatenate([minor, major]) * lam
+    ax.set_xticks(xticks)
+    labels = [rf"${m:g}\lambda$" for m in np.concatenate([minor, major])]
+    ax.set_xticklabels(labels)
+    ax.set_xlim(0, 5.2 * lam)
+    ax.set_xlabel(r"Target length $L$ in units of $\lambda$")
     plt.ylabel("Counts")
-    plt.title("Rare channels vs target length")
-    plt.legend()
+    plt.title("Rare channels counts with Garwood confidence intervals")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$\lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = 10^7$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    plt.grid()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(filename, dpi=1200)
+    plt.close()
 
 
 def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
@@ -294,32 +423,61 @@ def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
     n_bins : int
         Number of histogram bins.
     """
-    lam = Physics.mean_free_path_cm()
+    lam = Physics.lambda_cm()
 
-    x = sample_depth_from_uniform(rng, size=n_samples)
+    x = sample_depth(rng, size=n_samples)
     x_acc = x[x < L_cm]
 
+    plot_dir = _dir_path_finder(data=False)
+    filename = plot_dir / "depth_check.pdf"
+
     plt.figure(figsize=(12, 5))
+    plt.grid()
     plt.hist(
         x_acc,
         bins=n_bins,
         range=(0.0, L_cm),
         density=True,
         histtype="step",
-        label=f"Accepted depths (x < {L_cm} cm)",
+        label=r"Accepted depths: $x<\lambda$",
     )
 
     xs = np.linspace(0.0, L_cm, 400)
     norm = 1.0 - np.exp(-L_cm / lam)
     pdf_trunc = (1.0 / lam) * np.exp(-xs / lam) / norm
-    plt.plot(xs, pdf_trunc, label="Truncated exponential pdf (expected)")
+    plt.plot(
+        xs,
+        pdf_trunc,
+        label=(
+            r"Truncated exponential pdf: "
+            r"$\frac{1}{\lambda}\,\frac{e^{-x/\lambda}}{1 - e^{-L/\lambda}}$"
+        ),
+    )
 
-    plt.xlabel("First interaction depth x (cm)")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(
+                rf"$L = \lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = {n_samples}$"
+            ),
+        )
+    ]
+    plt.xlabel("First interaction depth $x$ [cm]")
     plt.ylabel("Probability density")
-    plt.title("Depth check: accepted x follows truncated exponential")
-    plt.legend()
+    plt.title(
+        "First interaction sampled depth $x$ distribution: MC vs expected"
+    )
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    plt.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     plt.tight_layout()
-    plt.show()
+    plt.savefig(filename, dpi=1200)
+    plt.close()
 
 
 def main():
@@ -333,8 +491,12 @@ def main():
     seed = 42
     rng = np.random.default_rng(seed)
 
-    lengths_cm = np.linspace(1, 100, 100)
-    n_events = 1_000_000
+    lengths_cm = np.linspace(
+        Physics.lambda_cm() / 10,
+        5 * Physics.lambda_cm(),
+        50,
+    )
+    n_events = 10_000_000
 
     results = run_length_scan(
         rng=rng,
@@ -345,16 +507,12 @@ def main():
     print(f"Mean free path lambda = {results['lambda_cm']:.6f} cm")
 
     plot_accepted_mc_vs_expected(results, n_events=n_events)
-    plot_rare_channels(results, show_accepted_trend=True)
-
-    L_hist = 100.0
-    n_hist = 200_000
-    n_bins = 80
+    plot_rare_channels(results)
     plot_depth_histogram(
         rng=rng,
-        L_cm=L_hist,
-        n_samples=n_hist,
-        n_bins=n_bins,
+        L_cm=Physics.lambda_cm(),
+        n_samples=200_000,
+        n_bins=80,
     )
 
 
