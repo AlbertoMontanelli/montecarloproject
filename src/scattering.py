@@ -58,8 +58,8 @@ def _dir_path_finder(data):
     return dir
 
 
-class Physics:
-    """Static container for physical constants and derived quantities."""
+class CrossSections:
+    """Static container for cross sections and derived quantities."""
 
     # --- Cross sections (cm^2) ---
     SIGMA_TOT_CM2 = 25.0e-27
@@ -81,11 +81,11 @@ class Physics:
         float
             Mean free path in cm.
         """
-        return Physics.MOLAR_MASS / (
-            Physics.NR_PROTONS
+        return CrossSections.MOLAR_MASS / (
+            CrossSections.NR_PROTONS
             * AVOGADRO
-            * Physics.DENSITY_G_CM3
-            * Physics.SIGMA_TOT_CM2
+            * CrossSections.DENSITY_G_CM3
+            * CrossSections.SIGMA_TOT_CM2
         )
 
     @staticmethod
@@ -98,8 +98,8 @@ class Physics:
         dict
             Dictionary with keys: 'pi0n', 'etan_2g', 'other'.
         """
-        p_pi0 = Physics.SIGMA_PI0_CM2 / Physics.SIGMA_TOT_CM2
-        p_eta = Physics.SIGMA_ETA_CM2 / Physics.SIGMA_TOT_CM2
+        p_pi0 = CrossSections.SIGMA_PI0_CM2 / CrossSections.SIGMA_TOT_CM2
+        p_eta = CrossSections.SIGMA_ETA_CM2 / CrossSections.SIGMA_TOT_CM2
         p_other = 1.0 - (p_pi0 + p_eta)
         return {
             "pi0n": p_pi0,
@@ -126,7 +126,7 @@ def sample_depth(rng, size):
     """
     u = rng.random(size)
     u = np.clip(u, 1e-15, 1.0)  # avoid log(0)
-    x_cm = -Physics.lambda_cm() * np.log(u)
+    x_cm = -CrossSections.lambda_cm() * np.log(u)
     return x_cm
 
 
@@ -144,7 +144,7 @@ def expected_prob(L_cm):
     p_acc : float
         Probability of acceptance.
     """
-    return 1.0 - np.exp(-L_cm / Physics.lambda_cm())
+    return 1.0 - np.exp(-L_cm / CrossSections.lambda_cm())
 
 
 def sample_channels(rng, n):
@@ -163,9 +163,10 @@ def sample_channels(rng, n):
     channels : numpy.ndarray
         Array of channel labels of length n.
     """
-    labels = list(Physics.channel_probabilities().keys())
+    labels = list(CrossSections.channel_probabilities().keys())
     p = np.array(
-        [Physics.channel_probabilities()[k] for k in labels], dtype=float
+        [CrossSections.channel_probabilities()[k] for k in labels],
+        dtype=float,
     )
     p = p / p.sum()
     channels = rng.choice(labels, size=n, p=p)
@@ -213,7 +214,7 @@ def run_length_scan(rng, lengths_cm, n_events):
         other_mc[i] = int(np.sum(channels == "other"))
 
     results = {
-        "lambda_cm": Physics.lambda_cm(),
+        "lambda_cm": CrossSections.lambda_cm(),
         "L_cm": lengths_cm,
         "accepted_mc": accepted_mc,
         "rejected_mc": rejected_mc,
@@ -235,7 +236,7 @@ def plot_accepted_mc_vs_expected(results, n_events):
     n_events : int
         Number of trials per target length.
     """
-    lam = Physics.lambda_cm()
+    lam = CrossSections.lambda_cm()
     L = results["L_cm"]
     acc_mc = results["accepted_mc"]
 
@@ -341,7 +342,7 @@ def plot_rare_channels(results, cl=0.68):
     cl : float
         Confidence level for Garwood interval (e.g. 0.68 or 0.90).
     """
-    lam = Physics.lambda_cm()
+    lam = CrossSections.lambda_cm()
     L = results["L_cm"]
     pi0 = results["pi0_mc"].astype(float)
     eta = results["eta_mc"].astype(float)
@@ -423,7 +424,7 @@ def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
     n_bins : int
         Number of histogram bins.
     """
-    lam = Physics.lambda_cm()
+    lam = CrossSections.lambda_cm()
 
     x = sample_depth(rng, size=n_samples)
     x_acc = x[x < L_cm]
@@ -492,8 +493,8 @@ def main():
     rng = np.random.default_rng(seed)
 
     lengths_cm = np.linspace(
-        Physics.lambda_cm() / 10,
-        5 * Physics.lambda_cm(),
+        CrossSections.lambda_cm() / 10,
+        5 * CrossSections.lambda_cm(),
         50,
     )
     n_events = 10_000_000
@@ -510,7 +511,7 @@ def main():
     plot_rare_channels(results)
     plot_depth_histogram(
         rng=rng,
-        L_cm=Physics.lambda_cm(),
+        L_cm=CrossSections.lambda_cm(),
         n_samples=200_000,
         n_bins=80,
     )
