@@ -53,9 +53,6 @@ def load_graph(root_path):
     f = ROOT.TFile.Open(root_path, "READ")
     d3 = f.Get("Table 3")
     g = d3.Get("Graph1D_y1")
-
-    # Keep the file alive by attaching it to the graph
-    g._root_file = f
     return g
 
 
@@ -101,12 +98,11 @@ def build_pdf_from_graph(g):
         tau_hi.append(hi)
         w.append(weight)
 
-    sumw = sum(w)
-    # Build normalized CDF
+    # Build CDF
     cdf: list[float] = []
     acc = 0.0
     for wi in w:
-        acc += wi / sumw
+        acc += wi / sum(w)
         cdf.append(acc)
     cdf[-1] = 1.0  # numerical robustness
 
@@ -131,84 +127,193 @@ def sample_t(pdf, rng, size):
     t: float
         Sampled Mandelstam t value.
     """
-    u = rng.random(size)
-    # binary search in python list
-    lo_i, hi_i = 0, len(pdf.cdf) - 1
-    while lo_i < hi_i:
-        mid = (lo_i + hi_i) // 2
-        if u <= pdf.cdf[mid]:
-            hi_i = mid
-        else:
-            lo_i = mid + 1
+    cdf = np.asarray(pdf.cdf, dtype=float)
 
-    i = lo_i
-    t = -float(rng.uniform(pdf.tau_lo[i], pdf.tau_hi[i]))
+    u = rng.random(size)  # shape (size,)
+    # Find the minimum bin index where CDF >= u
+    idx = np.searchsorted(cdf, u, side="left")
+
+    tau_lo = np.asarray(pdf.tau_lo, dtype=float)
+    tau_hi = np.asarray(pdf.tau_hi, dtype=float)
+
+    tau = rng.uniform(tau_lo[idx], tau_hi[idx])  # vectorized
+    t = -tau
+
+    if size == 1:
+        return float(t[0])
     return t
 
 
-def plot_binned_pdf_cdf(pdf):
+def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
     """
-    Plot the piecewise-constant PDF and the CDF built from DtPdf.
+    Plot the binned PDF and CDF from the provided DtPdf object.
+
+    Plot:
+
+    - Top: piecewise-constant PDF p(tau) + (optional) histogram of
+      sampled tau=-t
+    - Bottom: CDF F(tau)
 
     Parameters
     ----------
     pdf : DtPdf
         Precomputed bin edges and CDF.
+    rng : numpy.random.Generator | None
+        If provided and n_samples>0, samples are drawn and overlaid as
+        a histogram.
+    n_samples : int
+        Number of tau=-t samples for the diagnostic histogram.
+    plot_name : str
+        Name of the output plot file (without extension).
     """
-    tau_lo = np.array(pdf.tau_lo, dtype=float)
-    tau_hi = np.array(pdf.tau_hi, dtype=float)
-    cdf = np.array(pdf.cdf, dtype=float)
-
-    widths = tau_hi - tau_lo
-
-    # bin probabilities P_i from the cumulative
+    # Bin probabilities from CDF
+    cdf = np.asarray(pdf.cdf, dtype=float)
     cdf_prev = np.concatenate(([0.0], cdf[:-1]))
     P = cdf - cdf_prev
 
-    # piecewise-constant PDF value per bin (density)
-    p = P / widths
+    # Piecewise-constant PDF density in each bin
+    tau_lo = np.asarray(pdf.tau_lo, dtype=float)
+    tau_hi = np.asarray(pdf.tau_hi, dtype=float)
+    widths = tau_hi - tau_lo
+    p = P / widths  # 1/GeV^2
 
-    # For step plots we want edges and values
-    edges = np.concatenate((tau_lo[:1], tau_hi))
-    # Repeat p for step plot: len(values)=len(edges)-1
-    values = p
+    # Build edges for step plotting
+    edges = np.concatenate((tau_lo[:1], tau_hi))  # length nbins+1
 
-    # --- PDF plot ---
-    plt.figure()
-    plt.step(edges, np.concatenate((values, [values[-1]])), where="post")
-    plt.xlabel(r"$\tau = -t\ \mathrm{[GeV^2]}$")
-    plt.ylabel(r"$p(\tau)\ \mathrm{[1/GeV^2]}$")
-    plt.title("Binned PDF for tau=-t")
-    plt.ylim(bottom=0)
+    # --- figure with 2 rows ---
+    fig, (ax_pdf, ax_cdf) = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        figsize=(8, 7),
+        gridspec_kw={"height_ratios": [2, 1]},
+    )
+    if plot_name is None:
+        title = "Binned PDF and cumulative distribution for t-sampling"
+    if plot_name == "pi0":
+        title = (
+            r"Binned pdf and CDF for t-sampling from "
+            r"$\frac{d\sigma_{\pi^0}}{dt}$"
+        )
+    if plot_name == "eta":
+        title = (
+            r"Binned pdf and CDF for t-sampling from "
+            r"$\frac{d\sigma_{\eta}}{dt}$"
+        )
 
-    # --- CDF plot ---
-    plt.figure()
-    # CDF is constant within bin then jumps at tau_hi;
-    # show as step vs upper edges.
-    upper_edges = tau_hi
-    plt.step(upper_edges, cdf, where="post")
-    plt.xlabel(r"$\tau = -t\ \mathrm{[GeV^2]}$")
-    plt.ylabel(r"$F(\tau)$")
-    plt.title("Binned CDF for tau=-t")
-    plt.ylim(0, 1.05)
+    fig.suptitle(title)
+    # --- Top: PDF as step ---
+    ax_pdf.step(
+        edges, np.concatenate((p, [p[-1]])), where="post", label="Binned PDF"
+    )  # duplicate last value for step plot
 
-    plt.show()
+    # Optional: overlay sampled tau histogram
+    if rng is not None and n_samples and n_samples > 0:
+        t_samples = sample_t(pdf, rng, size=n_samples)
+        tau_samples = -np.asarray(t_samples, dtype=float)
+
+        # Use the *same binning* as the table for a clean comparison
+        ax_pdf.hist(
+            tau_samples,
+            bins=edges,
+            density=True,
+            histtype="step",
+            label=f"Sampled $-t$, N={n_samples:}",
+        )
+
+    ax_pdf.set_ylabel(r"$p(\tau)\ \mathrm{[1/GeV^2]}$")
+    ax_pdf.set_ylim(bottom=0.0)
+    ax_pdf.legend(loc="best")
+    ax_pdf.grid(True, alpha=0.3)
+
+    # --- Bottom: CDF as step vs upper bin edges ---
+    ax_cdf.step(tau_hi, cdf, where="post")
+    ax_cdf.set_xlabel(r"$\tau = -t\ \mathrm{[GeV^2]}$")
+    ax_cdf.set_ylabel(r"$P(\mathrm{bin}\leq i)$")
+    ax_cdf.set_ylim(0.0, 1.05)
+    ax_cdf.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    # Save figure
+    plot_dir = _dir_path_finder(data=False)
+    if plot_name is None:
+        fig_name = "dt_pdf_cdf.pdf"
+    else:
+        fig_name = f"{plot_name}_dt_pdf_cdf.pdf"
+    plt.savefig(plot_dir / fig_name, dpi=1200)
+    plt.close()
+
+
+def _kallen(x, y, z):
+    """Kallen function: lambda(x,y,z)."""
+    return x * x + y * y + z * z - 2 * x * y - 2 * x * z - 2 * y * z
+
+
+def cos_theta_from_t(t, s, m_a, m_b, m_c, m_d, clip=True):
+    """
+    Convert Mandelstam t -> cos(theta*) in the CM frame for a+b -> c+d.
+
+    Convention: t = (p_a - p_c)^2, metric (+,-,-,-).
+    theta* is the angle between incoming a and outgoing c in the CM.
+
+    Parameters
+    ----------
+    t : float or np.ndarray
+        Mandelstam t in (GeV)^2.
+    s : float
+        Mandelstam s in (GeV)^2.
+    m_a, m_b, m_c, m_d : float
+        Particle masses in GeV.
+    clip : bool
+        If True, clip numerical roundoff to [-1, 1].
+
+    Returns
+    -------
+    cos_theta : float or np.ndarray
+        cos(theta*) corresponding to t.
+    """
+    sqrt_s = np.sqrt(s)
+
+    p_a = np.sqrt(np.maximum(_kallen(s, m_a * m_a, m_b * m_b), 0.0)) / (
+        2.0 * sqrt_s
+    )
+    p_c = np.sqrt(np.maximum(_kallen(s, m_c * m_c, m_d * m_d), 0.0)) / (
+        2.0 * sqrt_s
+    )
+
+    E_a = (s + m_a * m_a - m_b * m_b) / (2.0 * sqrt_s)
+    E_c = (s + m_c * m_c - m_d * m_d) / (2.0 * sqrt_s)
+
+    denom = 2.0 * p_a * p_c
+    if np.any(denom == 0):
+        raise ValueError(
+            "Denominator 2*p_a*p_c is zero (check kinematics / thresholds)."
+        )
+
+    cos_th = (t - m_a * m_a - m_c * m_c + 2.0 * E_a * E_c) / denom
+
+    if clip:
+        cos_th = np.clip(cos_th, -1.0, 1.0)
+
+    return cos_th
 
 
 if __name__ == "__main__":
     data_dir = _dir_path_finder(data=True)
-    pi0_file = data_dir / "dsgima_dt_pi0_100GeV.root"
-    print(pi0_file)
-    eta_file = data_dir / "dsgima_dt_eta_100GeV.root"
-
-    g_pi0 = load_graph(pi0_file)
-    pdf_pi0 = build_pdf_from_graph(g_pi0)
-    plot_binned_pdf_cdf(pdf_pi0)
-
-    g_eta = load_graph(eta_file)
-    pdf_eta = build_pdf_from_graph(g_eta)
-    plot_binned_pdf_cdf(pdf_eta)
+    filenames = [
+        str(data_dir / "dsigma_dt_pi0.root"),
+        str(data_dir / "dsigma_dt_eta.root"),
+    ]
+    plot_names = ["pi0", "eta"]
 
     seed = 42
     rng = np.random.default_rng(seed)
     n_samples = 100_000
+
+    for f, plot_name in zip(filenames, plot_names):
+        g = load_graph(f)
+        pdf = build_pdf_from_graph(g)
+        plot_binned_pdf_cdf(
+            pdf, rng=rng, n_samples=n_samples, plot_name=plot_name
+        )
