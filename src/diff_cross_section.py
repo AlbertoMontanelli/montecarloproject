@@ -17,6 +17,20 @@ import ROOT
 
 from scattering import _dir_path_finder
 
+# Update matplotlib.pyplot parameters.
+plt.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans"],
+        "font.size": 16,
+        "axes.titlesize": 18,
+        "axes.labelsize": 16,
+        "legend.fontsize": 16,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+    }
+)
+
 
 @dataclass
 class DtPdf:
@@ -250,7 +264,7 @@ def _kallen(x, y, z):
     return x * x + y * y + z * z - 2 * x * y - 2 * x * z - 2 * y * z
 
 
-def cos_theta_from_t(t, s, m_a, m_b, m_c, m_d, clip=True):
+def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
     """
     Convert Mandelstam t -> cos(theta*) in the CM frame for a+b -> c+d.
 
@@ -259,20 +273,25 @@ def cos_theta_from_t(t, s, m_a, m_b, m_c, m_d, clip=True):
 
     Parameters
     ----------
-    t : float or np.ndarray
-        Mandelstam t in (GeV)^2.
     s : float
         Mandelstam s in (GeV)^2.
     m_a, m_b, m_c, m_d : float
         Particle masses in GeV.
-    clip : bool
-        If True, clip numerical roundoff to [-1, 1].
-
+    filename : str
+        Path to the ROOT file containing the dsigma/dt table.
+    rng : np.random.Generator
+        Random number generator.
+    n_samples : int
+        Number of samples to generate.
     Returns
     -------
     cos_theta : float or np.ndarray
         cos(theta*) corresponding to t.
     """
+    g = load_graph(filename)
+    pdf = build_pdf_from_graph(g)
+    t_samples = sample_t(pdf, rng, size=n_samples)
+
     sqrt_s = np.sqrt(s)
 
     p_a = np.sqrt(np.maximum(_kallen(s, m_a * m_a, m_b * m_b), 0.0)) / (
@@ -291,10 +310,8 @@ def cos_theta_from_t(t, s, m_a, m_b, m_c, m_d, clip=True):
             "Denominator 2*p_a*p_c is zero (check kinematics / thresholds)."
         )
 
-    cos_th = (t - m_a * m_a - m_c * m_c + 2.0 * E_a * E_c) / denom
-
-    if clip:
-        cos_th = np.clip(cos_th, -1.0, 1.0)
+    cos_th = (t_samples - m_a * m_a - m_c * m_c + 2.0 * E_a * E_c) / denom
+    cos_th = np.clip(cos_th, -1.0, 1.0)
 
     return cos_th
 
