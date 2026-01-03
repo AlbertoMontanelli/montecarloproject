@@ -158,7 +158,7 @@ def sample_t(pdf, rng, size):
     return t
 
 
-def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
+def plot_binned_pdf_cdf(pdf, rng, n_samples, plot_name="pi0"):
     """
     Plot the binned PDF and CDF from the provided DtPdf object.
 
@@ -172,9 +172,8 @@ def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
     ----------
     pdf : DtPdf
         Precomputed bin edges and CDF.
-    rng : numpy.random.Generator | None
-        If provided and n_samples>0, samples are drawn and overlaid as
-        a histogram.
+    rng : numpy.random.Generator
+        Random number generator (same instance used everywhere).
     n_samples : int
         Number of tau=-t samples for the diagnostic histogram.
     plot_name : str
@@ -202,8 +201,6 @@ def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
         figsize=(8, 7),
         gridspec_kw={"height_ratios": [2, 1]},
     )
-    if plot_name is None:
-        title = "Binned PDF and cumulative distribution for t-sampling"
     if plot_name == "pi0":
         title = (
             r"Binned pdf and CDF for t-sampling from "
@@ -221,19 +218,18 @@ def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
         edges, np.concatenate((p, [p[-1]])), where="post", label="Binned PDF"
     )  # duplicate last value for step plot
 
-    # Optional: overlay sampled tau histogram
-    if rng is not None and n_samples and n_samples > 0:
-        t_samples = sample_t(pdf, rng, size=n_samples)
-        tau_samples = -np.asarray(t_samples, dtype=float)
+    # Overlay sampled tau histogram
+    t_samples = sample_t(pdf, rng, size=n_samples)
+    tau_samples = -np.asarray(t_samples, dtype=float)
 
-        # Use the *same binning* as the table for a clean comparison
-        ax_pdf.hist(
-            tau_samples,
-            bins=edges,
-            density=True,
-            histtype="step",
-            label=f"Sampled $-t$, N={n_samples:}",
-        )
+    # Use the *same binning* as the table for a clean comparison
+    ax_pdf.hist(
+        tau_samples,
+        bins=edges,
+        density=True,
+        histtype="step",
+        label=f"Sampled $-t$, N={n_samples:}",
+    )
 
     ax_pdf.set_ylabel(r"$p(\tau)\ \mathrm{[1/GeV^2]}$")
     ax_pdf.set_ylim(bottom=0.0)
@@ -251,10 +247,7 @@ def plot_binned_pdf_cdf(pdf, rng=None, n_samples=0, plot_name=None):
 
     # Save figure
     plot_dir = _dir_path_finder(data=False)
-    if plot_name is None:
-        fig_name = "dt_pdf_cdf.pdf"
-    else:
-        fig_name = f"{plot_name}_dt_pdf_cdf.pdf"
+    fig_name = f"{plot_name}_dt_pdf_cdf.pdf"
     plt.savefig(plot_dir / fig_name, dpi=1200)
     plt.close()
 
@@ -311,7 +304,8 @@ def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
         )
 
     cos_th = (t_samples - m_a * m_a - m_c * m_c + 2.0 * E_a * E_c) / denom
-    cos_th = np.clip(cos_th, -1.0, 1.0)
+    eps = 1e-12
+    cos_th = np.clip(cos_th, -1.0 + eps, 1.0 - eps)
 
     return cos_th
 

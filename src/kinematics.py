@@ -3,16 +3,12 @@ Event kinematics for pi^- p -> X n with X-> gamma gamma.
 
 Calculation steps:
 
-- Build the initial-state 4-vectors in the LAB frame:
-   - incoming pi^- with fixed beam energy (e.g. 100 GeV) along +z
-   - target proton at rest
-- From the sampled t, compute cos(theta*) in the CM frame.
-- Build the outgoing meson (pi0 or eta) 4-vector in the CM with:
-   - fixed |p*| from two-body kinematics
-   - direction (theta*, phi) with phi uniform in [0, 2π)
-- Boost the meson back to the LAB using ROOT TLorentzVector boosts.
-- Decay the meson isotropically in its rest frame into two photons,
-  then boost the photons to the LAB.
+- Build initial-state 4-vectors in the LAB frame.
+- Sample cos(theta*) in the CM frame using t-distribution.
+- Build outgoing meson 4-vector in CM frame.
+- Boost meson 4-vector to LAB frame.
+- Isotropic two-body decay of meson to two photons in LAB frame.
+- Compute kinematic variables and plot distributions.
 """
 
 import math
@@ -20,6 +16,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import ROOT
+from matplotlib.lines import Line2D
 
 from diff_cross_section import _kallen, cos_theta_from_t
 from scattering import _dir_path_finder
@@ -259,6 +256,13 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
         v2 = g2_lab.Vect()
         opening_angle = v1.Angle(v2)
 
+        # Compute deltaR
+        eta1, eta2 = g1_lab.Eta(), g2_lab.Eta()
+        phi1, phi2 = g1_lab.Phi(), g2_lab.Phi()
+        dphi = np.arctan2(np.sin(phi1 - phi2), np.cos(phi1 - phi2))
+        deta = eta1 - eta2
+        dR = np.sqrt(deta**2 + dphi**2)
+
         dict = {
             "channel": channel,
             "cos_theta_star": float(cos_th),
@@ -268,13 +272,14 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
             "g2_lab": g2_lab,
             "m_gg": float(m_gg),
             "opening_angle": float(opening_angle),
+            "dR": float(dR),
         }
         event_list.append(dict)
 
     return event_list
 
 
-def plot_kinematics(n_samples, channel="pi0"):
+def plot_kinematics(n_samples, rng):
     """
     Plot kinematic distributions for generated events.
 
@@ -282,75 +287,149 @@ def plot_kinematics(n_samples, channel="pi0"):
     ----------
     n_samples : int
         Number of samples to generate.
-    channel : str
-        Either "pi0" or "eta".
+    rng : np.random.Generator
+        Random number generator.
     """
     plot_dir = _dir_path_finder(data=False)
 
-    rng = np.random.default_rng(42)
-    ev_list = generate_event_from_t(rng, n_samples=n_samples, channel=channel)
+    etas_g1, etas_g2 = {}, {}
+    etas_X = {}
+    dRs = {}
 
-    etas_g1, etas_g2 = [], []
-    etas_X = []
-    dRs = []
+    for channel in ["pi0", "eta"]:
+        etas_g1[channel] = []
+        etas_g2[channel] = []
+        etas_X[channel] = []
+        dRs[channel] = []
 
-    if channel == "pi0":
-        meson = r"$\pi^0$"
-    else:
-        meson = r"$\eta$"
+        ev_list = generate_event_from_t(
+            rng, n_samples=n_samples, channel=channel
+        )
 
-    for ev in ev_list:
-        pX_lab = ev["p_meson_lab"]
-        g1_lab = ev["g1_lab"]
-        g2_lab = ev["g2_lab"]
+        for ev in ev_list:
+            pX_lab = ev["p_meson_lab"]
+            g1_lab = ev["g1_lab"]
+            g2_lab = ev["g2_lab"]
+            eta1, eta2 = g1_lab.Eta(), g2_lab.Eta()
 
-        etas_X.append(pX_lab.Eta())
-
-        eta1, eta2 = g1_lab.Eta(), g2_lab.Eta()
-        phi1, phi2 = g1_lab.Phi(), g2_lab.Phi()
-
-        etas_g1.append(eta1)
-        etas_g2.append(eta2)
-
-        dphi = np.arctan2(np.sin(phi1 - phi2), np.cos(phi1 - phi2))
-        deta = eta1 - eta2
-        dRs.append(np.sqrt(deta**2 + dphi**2))
+            etas_g1[channel].append(eta1)
+            etas_g2[channel].append(eta2)
+            etas_X[channel].append(pX_lab.Eta())
+            dRs[channel].append(ev["dR"])
 
     plt.figure(figsize=(12, 5), dpi=1200)
-    plt.hist(etas_X, bins=80)
-    plt.xlabel(r"$\eta_X$ (LAB)")
+    plt.hist(
+        etas_X["pi0"], bins=80, alpha=0.6, label=r"$\pi^0$", range=(4, 10)
+    )
+    plt.hist(
+        etas_X["eta"], bins=80, alpha=0.6, label=r"$\eta$", range=(4, 10)
+    )
+    plt.xlabel(r"$\eta_X^{LAB}$")
     plt.ylabel("counts")
     plt.grid(True, alpha=0.3)
-    plt.title(f"{meson} pseudorapidity in LAB")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    plt.title("Meson pseudorapidity in LAB")
     plt.tight_layout()
-    plt.savefig(plot_dir / f"{channel}_eta_LAB.pdf", dpi=1200)
+    plt.savefig(plot_dir / "meson_eta_LAB.pdf", dpi=1200)
+    plt.close()
+
+    fig, (ax_pi0, ax_eta) = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        figsize=(8, 7),
+        gridspec_kw={"height_ratios": [1, 1]},
+    )
+    fig.suptitle(r"$\gamma$ pseudorapidity in LAB from meson decay")
+    ax_pi0.hist(
+        etas_g1["pi0"], bins=80, alpha=0.6, label=r"$\gamma_1$", range=(0, 10)
+    )
+    ax_pi0.hist(
+        etas_g2["pi0"], bins=80, alpha=0.6, label=r"$\gamma_2$", range=(0, 10)
+    )
+    ax_pi0.set_xlabel(r"$\eta_\gamma$ (LAB)")
+    ax_pi0.set_ylabel("counts")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$, $\pi^0$ decay"),
+        )
+    ]
+    handles, labels = ax_pi0.get_legend_handles_labels()
+    ax_pi0.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    ax_pi0.grid(True, alpha=0.3)
+
+    ax_eta.hist(
+        etas_g1["eta"], bins=80, alpha=0.6, label=r"$\gamma_1$", range=(0, 10)
+    )
+    ax_eta.hist(
+        etas_g2["eta"], bins=80, alpha=0.6, label=r"$\gamma_2$", range=(0, 10)
+    )
+    ax_eta.set_xlabel(r"$\eta_\gamma$ (LAB)")
+    ax_eta.set_ylabel("counts")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$, $\eta$ decay"),
+        )
+    ]
+    handles, labels = ax_eta.get_legend_handles_labels()
+    ax_eta.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    ax_eta.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(plot_dir / "gamma_eta_from_meson.pdf", dpi=1200)
     plt.close()
 
     plt.figure(figsize=(12, 5), dpi=1200)
-    plt.hist(etas_g1, bins=80, alpha=0.6, label="gamma1")
-    plt.hist(etas_g2, bins=80, alpha=0.6, label="gamma2")
-    plt.xlabel(r"$\eta_\gamma$ (LAB)")
-    plt.ylabel("counts")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.title(rf"$\gamma$ pseudorapidity in LAB from {meson} decay")
-    plt.tight_layout()
-    plt.savefig(plot_dir / f"gamma_eta_from_{channel}.pdf", dpi=1200)
-    plt.close()
-
-    plt.figure(figsize=(12, 5), dpi=1200)
-    plt.hist(dRs, bins=80)
-    plt.xlabel(r"$\Delta R(\gamma,\gamma)$")
+    plt.hist(dRs["pi0"], bins=80, alpha=0.6, label=r"$\pi^0$", range=(0, 6))
+    plt.hist(dRs["eta"], bins=80, alpha=0.6, label=r"$\eta$", range=(0, 6))
+    plt.xlabel(
+        r"$\Delta R(\gamma,\gamma)=\sqrt{(\Delta \eta)^2 + (\Delta \phi)^2}$"
+    )
     plt.ylabel("counts")
     plt.grid(True, alpha=0.3)
-    plt.title(rf"$\gamma$ separation from {meson} decay")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    plt.title(r"$\gamma$ separation from meson decay")
     plt.tight_layout()
-    plt.savefig(plot_dir / f"gamma_separation_from_{channel}.pdf", dpi=1200)
+    plt.savefig(plot_dir / "gamma_separation.pdf", dpi=1200)
     plt.close()
-
-    plt.show()
 
 
 if __name__ == "__main__":
-    plot_kinematics(n_samples=1000, channel="pi0")
-    plot_kinematics(n_samples=1000, channel="eta")
+    rng = np.random.default_rng(42)
+    plot_kinematics(n_samples=100_000, rng=rng)
