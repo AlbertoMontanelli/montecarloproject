@@ -238,6 +238,9 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
     cos_th_list = cos_theta_from_t(
         s, M_PI_MINUS, M_P, m_meson, M_N, filename, rng, n_samples
     )
+    # Ensure output is a list even for single sample
+    if n_samples == 1:
+        cos_th_list = [cos_th_list]
 
     event_list = []
     for cos_th in cos_th_list:

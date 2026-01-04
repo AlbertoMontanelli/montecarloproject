@@ -11,6 +11,7 @@ Optimize target thickness L by simulating:
 import matplotlib.pyplot as plt
 import numpy as np
 import ROOT
+from loguru import logger
 
 from detector import detect_two_photons
 from kinematics import M_ETA, M_PI0, generate_event_from_t
@@ -346,11 +347,17 @@ def scan_L(
             "mgg_bkg": np.asarray(mgg_bkg, dtype=float),
         }
 
-        print(
+        logger.info(
             f"L={L_cm:6.2f} cm | int={n_int:7d} | pi0 reco={n_pi0_reco:5d} "
             f"| Z_pi0={Z_pi0:6.3f} | eta reco={n_eta_reco:5d} | "
             f"Z_eta={Z_eta:6.3f}"
         )
+        fractions = [
+            n_pi0_true / n_int,
+            n_eta_true / n_int,
+            n_other_true / n_int,
+        ]
+        logger.info(f"fractions: {fractions}")
 
     return out
 
