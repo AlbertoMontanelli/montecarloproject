@@ -102,8 +102,8 @@ class CrossSections:
         p_eta = CrossSections.SIGMA_ETA_CM2 / CrossSections.SIGMA_TOT_CM2
         p_other = 1.0 - (p_pi0 + p_eta)
         return {
-            "pi0n": p_pi0,
-            "etan_2g": p_eta,
+            "pi0": p_pi0,
+            "eta": p_eta,
             "other": p_other,
         }
 
@@ -209,8 +209,8 @@ def run_length_scan(rng, lengths_cm, n_events):
         rejected_mc[i] = n_events - n_acc
 
         channels = sample_channels(rng, n=n_acc)
-        pi0_mc[i] = int(np.sum(channels == "pi0n"))
-        eta_mc[i] = int(np.sum(channels == "etan_2g"))
+        pi0_mc[i] = int(np.sum(channels == "pi0"))
+        eta_mc[i] = int(np.sum(channels == "eta"))
         other_mc[i] = int(np.sum(channels == "other"))
 
     results = {

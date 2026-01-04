@@ -15,6 +15,9 @@ This is intentionally simple but consistent and L-dependent via:
 
 import numpy as np
 
+# Radiation length of polyethylene
+X0 = 4.7736 / 0.93  # cm
+
 
 def intersect_calo_plane(photon_p4, z_vtx_cm, z_cal_cm):
     """
@@ -78,7 +81,7 @@ def passes_calo_aperture(x_cm, y_cm, R_cm):
     return r2 <= (R_cm * R_cm)
 
 
-def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm, X0_cm):
+def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
     """
     Survival probability for a photon to exit the target.
 
@@ -97,8 +100,6 @@ def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm, X0_cm):
         Target thickness.
     R_tgt_cm : float
         Target radius (cm).
-    X0_cm : float
-        Radiation length of material (cm).
 
     Returns
     -------
@@ -127,7 +128,7 @@ def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm, X0_cm):
         # exactly along z -> never exits laterally
         l_side = float("inf")
 
-    lambda_pair = (9.0 / 7.0) * X0_cm
+    lambda_pair = (9.0 / 7.0) * X0
     p_esc = np.exp(-min(l_front, l_side) / lambda_pair)
 
     # Clamp to [0, 1] against tiny numerical overshoots
@@ -182,7 +183,7 @@ def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.5):
     return x_meas, y_meas
 
 
-def reco_eta_phi_from_hit(x_cm, y_cm, z_vtx_cm, z_cal_cm):
+def eta_phi_from_hit(x_cm, y_cm, z_vtx_cm, z_cal_cm):
     """
     Reconstruct direction (eta, phi) from measured hit position.
 
@@ -230,9 +231,8 @@ def detect_two_photons(
     z_vtx_cm,
     L_cm,
     z_cal_cm,
-    R_cm,
+    R_calo_cm,
     R_tgt_cm,
-    X0_cm,
     E_thr_GeV=0.1,
     deltaR_min=0.02,
     sigma_xy_cm=0.5,
@@ -265,12 +265,10 @@ def detect_two_photons(
         Target thickness (cm).
     z_cal_cm : float
         Calorimeter plane position z (cm).
-    R_cm : float
+    R_calo_cm : float
         Calorimeter active radius (cm).
     R_tgt_cm : float
         Target radius (cm).
-    X0_cm : float
-        Radiation length of target material (cm).
     E_thr_GeV : float
         Energy threshold on MEASURED energy (GeV).
     deltaR_min : float
@@ -289,8 +287,8 @@ def detect_two_photons(
         deltaR.
     """
     # ---------- escape ----------
-    p1 = photon_escape_prob(g1_lab, z_vtx_cm, L_cm, R_tgt_cm, X0_cm)
-    p2 = photon_escape_prob(g2_lab, z_vtx_cm, L_cm, R_tgt_cm, X0_cm)
+    p1 = photon_escape_prob(g1_lab, z_vtx_cm, L_cm, R_tgt_cm)
+    p2 = photon_escape_prob(g2_lab, z_vtx_cm, L_cm, R_tgt_cm)
     if rng.random() > p1:
         return False, {}
     if rng.random() > p2:
@@ -301,9 +299,9 @@ def detect_two_photons(
     ok2, x2, y2 = intersect_calo_plane(g2_lab, z_vtx_cm, z_cal_cm)
     if not ok1 or not ok2:
         return False, {}
-    if not passes_calo_aperture(x1, y1, R_cm):
+    if not passes_calo_aperture(x1, y1, R_calo_cm):
         return False, {}
-    if not passes_calo_aperture(x2, y2, R_cm):
+    if not passes_calo_aperture(x2, y2, R_calo_cm):
         return False, {}
 
     # ---------- measurement ----------
@@ -317,8 +315,8 @@ def detect_two_photons(
     x1m, y1m = smear_position(rng, x1, y1, sigma_xy_cm=sigma_xy_cm)
     x2m, y2m = smear_position(rng, x2, y2, sigma_xy_cm=sigma_xy_cm)
 
-    eta1, phi1 = reco_eta_phi_from_hit(x1m, y1m, z_vtx_cm, z_cal_cm)
-    eta2, phi2 = reco_eta_phi_from_hit(x2m, y2m, z_vtx_cm, z_cal_cm)
+    eta1, phi1 = eta_phi_from_hit(x1m, y1m, z_vtx_cm, z_cal_cm)
+    eta2, phi2 = eta_phi_from_hit(x2m, y2m, z_vtx_cm, z_cal_cm)
 
     if not (np.isfinite(eta1) and np.isfinite(eta2)):
         return False, {}
