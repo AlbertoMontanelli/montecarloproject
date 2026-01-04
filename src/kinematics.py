@@ -293,36 +293,45 @@ def plot_kinematics(n_samples, rng):
     plot_dir = _dir_path_finder(data=False)
 
     etas_g1, etas_g2 = {}, {}
-    etas_X = {}
+    etas_meson = {}
     dRs = {}
+    E_g1, E_g2 = {}, {}
+    E_meson = {}
 
     for channel in ["pi0", "eta"]:
         etas_g1[channel] = []
         etas_g2[channel] = []
-        etas_X[channel] = []
+        etas_meson[channel] = []
+        E_meson[channel] = []
         dRs[channel] = []
+        E_g1[channel] = []
+        E_g2[channel] = []
 
         ev_list = generate_event_from_t(
             rng, n_samples=n_samples, channel=channel
         )
 
         for ev in ev_list:
-            pX_lab = ev["p_meson_lab"]
+            p_meson_lab = ev["p_meson_lab"]
             g1_lab = ev["g1_lab"]
             g2_lab = ev["g2_lab"]
             eta1, eta2 = g1_lab.Eta(), g2_lab.Eta()
 
             etas_g1[channel].append(eta1)
             etas_g2[channel].append(eta2)
-            etas_X[channel].append(pX_lab.Eta())
+            etas_meson[channel].append(p_meson_lab.Eta())
+            E_meson[channel].append(p_meson_lab.E())
             dRs[channel].append(ev["dR"])
+            E_g1[channel].append(g1_lab.E())
+            E_g2[channel].append(g2_lab.E())
 
+    # Plot pseudorapidity of mesons
     plt.figure(figsize=(12, 5), dpi=1200)
     plt.hist(
-        etas_X["pi0"], bins=80, alpha=0.6, label=r"$\pi^0$", range=(4, 10)
+        etas_meson["pi0"], bins=80, alpha=0.6, label=r"$\pi^0$", range=(4, 10)
     )
     plt.hist(
-        etas_X["eta"], bins=80, alpha=0.6, label=r"$\eta$", range=(4, 10)
+        etas_meson["eta"], bins=80, alpha=0.6, label=r"$\eta$", range=(4, 10)
     )
     plt.xlabel(r"$\eta_X^{LAB}$")
     plt.ylabel("counts")
@@ -345,6 +354,7 @@ def plot_kinematics(n_samples, rng):
     plt.savefig(plot_dir / "meson_eta_LAB.pdf", dpi=1200)
     plt.close()
 
+    # Plot pseudorapidity of the two photons from meson decay
     fig, (ax_pi0, ax_eta) = plt.subplots(
         2,
         1,
@@ -359,7 +369,7 @@ def plot_kinematics(n_samples, rng):
     ax_pi0.hist(
         etas_g2["pi0"], bins=80, alpha=0.6, label=r"$\gamma_2$", range=(0, 10)
     )
-    ax_pi0.set_xlabel(r"$\eta_\gamma$ (LAB)")
+    ax_pi0.set_xlabel(r"$\eta_\gamma^{LAB}$")
     ax_pi0.set_ylabel("counts")
     extra_line = [
         Line2D(
@@ -382,7 +392,7 @@ def plot_kinematics(n_samples, rng):
     ax_eta.hist(
         etas_g2["eta"], bins=80, alpha=0.6, label=r"$\gamma_2$", range=(0, 10)
     )
-    ax_eta.set_xlabel(r"$\eta_\gamma$ (LAB)")
+    ax_eta.set_xlabel(r"$\eta_\gamma^{LAB}$")
     ax_eta.set_ylabel("counts")
     extra_line = [
         Line2D(
@@ -398,11 +408,11 @@ def plot_kinematics(n_samples, rng):
         labels + [extra_line[0].get_label()],
     )
     ax_eta.grid(True, alpha=0.3)
-
     plt.tight_layout()
     plt.savefig(plot_dir / "gamma_eta_from_meson.pdf", dpi=1200)
     plt.close()
 
+    # Plot deltaR between the two photons from meson decay
     plt.figure(figsize=(12, 5), dpi=1200)
     plt.hist(dRs["pi0"], bins=80, alpha=0.6, label=r"$\pi^0$", range=(0, 6))
     plt.hist(dRs["eta"], bins=80, alpha=0.6, label=r"$\eta$", range=(0, 6))
@@ -427,6 +437,115 @@ def plot_kinematics(n_samples, rng):
     plt.title(r"$\gamma$ separation from meson decay")
     plt.tight_layout()
     plt.savefig(plot_dir / "gamma_separation.pdf", dpi=1200)
+    plt.close()
+
+    # Plot energy in LAB of the two photons from meson decay
+    fig, (ax_pi0, ax_eta) = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        figsize=(8, 7),
+        gridspec_kw={"height_ratios": [1, 1]},
+    )
+    fig.suptitle(r"$\gamma$ energy in LAB from meson decay")
+    ax_pi0.hist(
+        E_g1["pi0"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\gamma_1$",
+    )
+    ax_pi0.hist(
+        E_g2["pi0"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\gamma_2$",
+    )
+    ax_pi0.set_xlabel(r"$E_\gamma^{LAB}$ [GeV]")
+    ax_pi0.set_ylabel("counts")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$, $\pi^0$ decay"),
+        )
+    ]
+    handles, labels = ax_pi0.get_legend_handles_labels()
+    ax_pi0.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+        fontsize=14,
+        loc="lower left",
+    )
+    ax_pi0.grid(True, alpha=0.3)
+
+    ax_eta.hist(
+        E_g1["eta"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\gamma_1$",
+    )
+    ax_eta.hist(
+        E_g2["eta"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\gamma_2$",
+    )
+    ax_eta.set_xlabel(r"$E_\gamma^{LAB}$ [GeV]")
+    ax_eta.set_ylabel("counts")
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$, $\eta$ decay"),
+        )
+    ]
+    handles, labels = ax_eta.get_legend_handles_labels()
+    ax_eta.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+        fontsize=14,
+        loc="lower left",
+    )
+    ax_eta.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(plot_dir / "gamma_energy_from_meson.pdf", dpi=1200)
+    plt.close()
+
+    # Plot meson energy in LAB
+    plt.figure(figsize=(12, 5), dpi=1200)
+    plt.hist(
+        E_meson["pi0"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\pi^0$",
+    )
+    plt.hist(
+        E_meson["eta"],
+        bins=80,
+        alpha=0.6,
+        label=r"$\eta$",
+    )
+    plt.xlabel(r"$E_X^{LAB}$")
+    plt.ylabel("counts")
+    plt.grid(True, alpha=0.3)
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$N = {n_samples}$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+    plt.title("Meson energy in LAB")
+    plt.tight_layout()
+    plt.savefig(plot_dir / "meson_E_LAB.pdf", dpi=1200)
     plt.close()
 
 
