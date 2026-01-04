@@ -44,7 +44,7 @@ skip-magic-trailing-comma = false
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "PL", "D"]
-ignore = ["D203", "D213", "PLR0913", "PLR0915"]
+ignore = ["D203", "D213", "PLR0913", "PLR0915", "PLR0911"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
