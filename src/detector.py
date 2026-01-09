@@ -4,19 +4,27 @@ Toy detector model: photon transport to a forward EM calorimeter.
 - Geometry: plane at z = z_cal, circular active area of radius R.
 - Escape: exponential survival in target with lambda = (9/7) X0
   (pair production).
-- Measurement: smear (x,y) on calorimeter and smear energy.
+- Measurement: smear (x,y) on calorimeter and smear energy. Possibly
+  include additional material-dependent smearing terms based on photon
+  path length in target.
+- Selection: energy threshold on measured energy, cluster separation.
 - Reconstruction: eta, phi from (x_meas, y_meas, z_cal - z_vtx).
 
-This is intentionally simple but consistent and L-dependent via:
+L-dependence via:
+
 - path length in material before exiting target
 - vertex depth z_vtx which affects geometry and separation at the
-  calorimeter
+  calorimeter plane.
+- smearing via material-dependent terms based on path length.
 """
 
 import numpy as np
 
 # Radiation length of polyethylene
 X0 = 4.7736 / 0.93  # cm
+
+# Use a simple high-energy approximation for pair production length
+LAMBDA_PAIR = (9.0 / 7.0) * X0
 
 
 def intersect_calo_plane(photon_p4, z_vtx_cm, z_cal_cm):
@@ -81,12 +89,9 @@ def passes_calo_aperture(x_cm, y_cm, R_cm):
     return r2 <= (R_cm * R_cm)
 
 
-def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
+def photon_exit_length_cm(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
     """
-    Survival probability for a photon to exit the target.
-
-    Use a simple high-energy approximation for pair production length:
-        lambda_pair = (9/7) * X0
+    Geometric path length (cm) a photon must travel to exit the target.
 
     Verify both forward and lateral exit.
 
@@ -103,8 +108,8 @@ def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
 
     Returns
     -------
-    p_esc : float
-        Escape probability in [0,1].
+    path_length: float
+        Photon path length in cm.
     """
     if z_vtx_cm >= L_cm:
         return 0.0
@@ -122,16 +127,40 @@ def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
     # lateral path length
     nT2 = np.sqrt(nx * nx + ny * ny)
     if nT2 > 0.0 and np.isfinite(nT2):
-        nT = float(np.sqrt(nT2))
+        nT = float(nT2)
         l_side = R_tgt_cm / nT
     else:
         # exactly along z -> never exits laterally
         l_side = float("inf")
 
-    lambda_pair = (9.0 / 7.0) * X0
-    p_esc = np.exp(-min(l_front, l_side) / lambda_pair)
+    path_length = min(l_front, l_side)
+    return path_length
 
-    # Clamp to [0, 1] against tiny numerical overshoots
+
+def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
+    """
+    Survival probability for a photon to exit the target.
+
+    Parameters
+    ----------
+    photon_p4 : ROOT.TLorentzVector
+        Photon 4-vector in LAB.
+    z_vtx_cm : float
+        Production depth inside target.
+    L_cm : float
+        Target thickness.
+    R_tgt_cm : float
+        Target radius (cm).
+
+    Returns
+    -------
+    p_esc: float
+        Escape probability in [0,1].
+    """
+    path_length = photon_exit_length_cm(photon_p4, z_vtx_cm, L_cm, R_tgt_cm)
+    p_esc = np.exp(-path_length / LAMBDA_PAIR)
+
+    # Clamp to [0, 1]
     if p_esc < 0.0:
         return 0.0
     if p_esc > 1.0:
@@ -139,18 +168,26 @@ def photon_escape_prob(photon_p4, z_vtx_cm, L_cm, R_tgt_cm):
     return p_esc
 
 
-def smear_energy(rng, E_GeV, a=0.12, b=0.02, c=0.0):
+def smear_energy(rng, E_GeV, a=0.12, b=0.02, c=0.0, path_length=None):
     """
     Implement simple calorimeter energy resolution model.
 
-    sigma_E/E = sqrt( (a/sqrt(E))^2 + b^2 + (c/E)^2 ), with E in GeV.
+    The relative energy resolution is given by the quadratic sum of
+    three terms: stochastic, constant, and noise.
+    If path_length is provided, an additional material-dependent
+    smearing term is added to the constant term based on the photon
+    path length in the target.
 
     Parameters
     ----------
     rng : np.random.Generator
+        Random number generator.
     E_GeV : float
+        Expected photon energy.
     a, b, c : float
         Resolution parameters.
+    path_length : float or None
+        Photon path length. If None, no extra smearing.
 
     Returns
     -------
@@ -158,28 +195,53 @@ def smear_energy(rng, E_GeV, a=0.12, b=0.02, c=0.0):
         Smeared energy (GeV), clipped to be >= 0.
     """
     E = max(E_GeV, 1e-9)
-    rel = np.sqrt((a / np.sqrt(E)) ** 2 + b**2 + (c / E) ** 2)
+
+    b_eff = b
+    if path_length is not None:
+        mat_length = path_length / LAMBDA_PAIR if LAMBDA_PAIR > 0.0 else 0.0
+        _k_E = 0.1  # Strength of material-dependent smearing term
+        t = max(float(mat_length), 0.0)
+        b_eff = float(np.sqrt(b * b + (_k_E * t) * (_k_E * t)))
+
+    rel = np.sqrt((a / np.sqrt(E)) ** 2 + b_eff**2 + (c / E) ** 2)
     sigma = rel * E
     E_meas = rng.normal(E, sigma)
     return max(E_meas, 0.0)
 
 
-def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.5):
+def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.5, path_length=None):
     """
     Gaussian smearing of the shower centroid on calo plane.
 
+    If path_length is provided, an additional material-dependent
+    smearing term is added to the constant term based on the photon
+    path length in the target.
+
     Parameters
     ----------
+    rng : np.random.Generator
+        Random number generator.
+    x_cm, y_cm : float
+        Impact point on calo plane.
     sigma_xy_cm : float
         Position resolution (cm).
+    path_length : float or None
+        Photon path length. If None, no extra smearing.
 
     Returns
     -------
     x_meas, y_meas : float
         Measured hit coordinates.
     """
-    x_meas = rng.normal(x_cm, sigma_xy_cm)
-    y_meas = rng.normal(y_cm, sigma_xy_cm)
+    sigma_eff = sigma_xy_cm
+    if path_length is not None:
+        mat_length = path_length / LAMBDA_PAIR if LAMBDA_PAIR > 0.0 else 0.0
+        _k_xy = 1.0  # Strength of material-dependent smearing term
+        t = max(float(mat_length), 0.0)
+        sigma_eff = sigma_xy_cm * (1.0 + _k_xy * t)
+
+    x_meas = rng.normal(x_cm, sigma_eff)
+    y_meas = rng.normal(y_cm, sigma_eff)
     return x_meas, y_meas
 
 
@@ -192,7 +254,9 @@ def eta_phi_from_hit(x_cm, y_cm, z_vtx_cm, z_cal_cm):
     x_cm, y_cm : float
         Measured hit coordinates.
     z_vtx_cm : float
+        Production vertex z (cm).
     z_cal_cm : float
+        Calorimeter plane position z (cm).
 
     Returns
     -------
@@ -212,7 +276,14 @@ def eta_phi_from_hit(x_cm, y_cm, z_vtx_cm, z_cal_cm):
 
 def deltaR(eta1, phi1, eta2, phi2):
     """
-    Compute deltaR = sqrt(deta^2 + dphi^2).
+    Compute cluster separation in (eta, phi) space.
+
+    Parameters
+    ----------
+    eta1, phi1 : float
+        Direction from cluster 1.
+    eta2, phi2 : float
+        Direction from cluster 2.
 
     Returns
     -------
@@ -238,16 +309,18 @@ def detect_two_photons(
     sigma_xy_cm=0.5,
     res_a=0.12,
     res_b=0.02,
+    en_material_smearing=False,
+    xy_material_smearing=False,
 ):
     """
-    Full toy detection chain for two photons.
+    Full detection chain for two photons.
 
     Steps (per photon):
 
     - escape in target (stochastic)
     - intersect plane and aperture cut
     - smear energy and position
-    - apply energy threshold on MEASURED energy
+    - apply energy threshold on measured energy
 
     Finally:
 
@@ -257,6 +330,7 @@ def detect_two_photons(
     Parameters
     ----------
     rng : np.random.Generator
+        Random number generator.
     g1_lab, g2_lab : ROOT.TLorentzVector
         Photon 4-vectors in LAB.
     z_vtx_cm : float
@@ -277,6 +351,10 @@ def detect_two_photons(
         Position resolution (cm).
     res_a, res_b : float
         Energy resolution parameters.
+    en_material_smearing: bool
+        If True include material-dependent smearing in energy.
+    xy_material_smearing: bool
+        If True include material-dependent smearing in position.
 
     Returns
     -------
@@ -304,16 +382,50 @@ def detect_two_photons(
     if not passes_calo_aperture(x2, y2, R_calo_cm):
         return False, {}
 
-    # ---------- measurement ----------
-    E1_meas = smear_energy(rng, g1_lab.E(), a=res_a, b=res_b, c=0.0)
-    E2_meas = smear_energy(rng, g2_lab.E(), a=res_a, b=res_b, c=0.0)
+    # ---------- measurement+smearing----------
+    if en_material_smearing or xy_material_smearing:
+        path_length_1 = photon_exit_length_cm(
+            g1_lab, z_vtx_cm, L_cm, R_tgt_cm
+        )
+        path_length_2 = photon_exit_length_cm(
+            g2_lab, z_vtx_cm, L_cm, R_tgt_cm
+        )
+
+    E1_meas = smear_energy(
+        rng,
+        g1_lab.E(),
+        a=res_a,
+        b=res_b,
+        c=0.0,
+        path_length=path_length_1 if en_material_smearing else None,
+    )
+    E2_meas = smear_energy(
+        rng,
+        g2_lab.E(),
+        a=res_a,
+        b=res_b,
+        c=0.0,
+        path_length=path_length_2 if en_material_smearing else None,
+    )
 
     # threshold on measured energy
     if E1_meas < E_thr_GeV or E2_meas < E_thr_GeV:
         return False, {}
 
-    x1m, y1m = smear_position(rng, x1, y1, sigma_xy_cm=sigma_xy_cm)
-    x2m, y2m = smear_position(rng, x2, y2, sigma_xy_cm=sigma_xy_cm)
+    x1m, y1m = smear_position(
+        rng,
+        x1,
+        y1,
+        sigma_xy_cm=sigma_xy_cm,
+        path_length=path_length_1 if xy_material_smearing else None,
+    )
+    x2m, y2m = smear_position(
+        rng,
+        x2,
+        y2,
+        sigma_xy_cm=sigma_xy_cm,
+        path_length=path_length_2 if xy_material_smearing else None,
+    )
 
     eta1, phi1 = eta_phi_from_hit(x1m, y1m, z_vtx_cm, z_cal_cm)
     eta2, phi2 = eta_phi_from_hit(x2m, y2m, z_vtx_cm, z_cal_cm)

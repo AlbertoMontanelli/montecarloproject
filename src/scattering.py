@@ -1,27 +1,16 @@
 """
-pi- on polyethylene target (simple MC scaffold).
+Simulation of pi- p interactions in a polyethylene target.
 
-This script simulates the depth of the first interaction of an incoming
-pi- in a target of thickness L, assuming an exponential law with mean
-free path lambda.
+Simulate the first interaction depth and channel choice of incoming pi-
+particles in a polyethylene target of varying thickness L.
+Produces plots comparing Monte Carlo results to analytical expectations
+for:
 
-Workflow
---------
-1) Sample u ~ Uniform(0, 1) and transform to x = -lambda * ln(u).
-2) Accept the event if x < L (interaction happens inside target).
-3) For accepted events, choose the interaction channel according to
-   cross-section ratios.
-4) Produce three plots:
-   (1) Accepted counts: MC vs expected with binomial errors.
-   (2) Rare channels (pi0, eta): MC counts with Poisson errors, with an
-       optional scaled reminder of accepted counts.
-   (3) Histogram of accepted depths x and comparison with the expected
-       truncated exponential pdf on [0, L].
-
-Note
-----
-This is a counting-level model. No photon transport or detector effects
-are included at this stage.
+- Accepted interaction counts vs target length L.
+- Rare channel counts meson n -> 2 gamma with Garwood confidence
+  intervals.
+- Histogram of first interaction depths x for a fixed target length L,
+  compared to the expected truncated exponential distribution.
 """
 
 from pathlib import Path

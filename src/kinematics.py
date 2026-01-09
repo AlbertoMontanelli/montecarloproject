@@ -216,7 +216,6 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
     event_list : list[dict]
         List of dictionaries with ROOT TLorentzVectors and useful
         scalars:
-
         - cos_theta_star
         - p_meson_cm, p_meson_lab
         - g1_lab, g2_lab
@@ -285,6 +284,14 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
 def plot_kinematics(n_samples, rng):
     """
     Plot kinematic distributions for generated events.
+
+    Plots:
+
+    - Meson pseudorapidity in LAB.
+    - Photon pseudorapidity in LAB from meson decay.
+    - DeltaR between the two photons from meson decay.
+    - Photon energy in LAB from meson decay.
+    - Meson energy in LAB.
 
     Parameters
     ----------

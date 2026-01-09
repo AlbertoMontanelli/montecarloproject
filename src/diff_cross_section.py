@@ -1,7 +1,8 @@
 """
 Sample Mandelstam t from binned dsigma/dt tables stored in ROOT files.
 
-This module provides functionality to:
+Provide functionality to:
+
 - Load dsigma/dt data from ROOT TGraphAsymmErrors.
 - Build a piecewise-constant PDF and CDF for tau = -t.
 - Sample t values according to the PDF.
@@ -74,10 +75,12 @@ def build_pdf_from_graph(g):
     """
     Build a CDF from a TGraphAsymmErrors containing binned dsigma/dt.
 
-    For each point i:
+    For each point i in the graph:
 
-    - tau bin = [x - ex_low, x + ex_high]
-    - weight w_i = (dsigma/dt)_i * (tau_hi - tau_lo)
+    - Get x_i, y_i, and bin width from asymmetric errors.
+    - Compute weight w_i = max(0, y_i) * width_i for central value
+      generation.
+    - Build CDF from normalized weights.
 
     Parameters
     ----------
@@ -164,8 +167,7 @@ def plot_binned_pdf_cdf(pdf, rng, n_samples, plot_name="pi0"):
 
     Plot:
 
-    - Top: piecewise-constant PDF p(tau) + (optional) histogram of
-      sampled tau=-t
+    - Top: piecewise-constant PDF p(tau) + histogram of sampled tau=-t
     - Bottom: CDF F(tau)
 
     Parameters
@@ -261,8 +263,10 @@ def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
     """
     Convert Mandelstam t -> cos(theta*) in the CM frame for a+b -> c+d.
 
-    Convention: t = (p_a - p_c)^2, metric (+,-,-,-).
-    theta* is the angle between incoming a and outgoing c in the CM.
+    Convention:
+
+    - t = (p_a - p_c)^2, metric (+,-,-,-).
+    - theta* is the angle between incoming a and outgoing c in the CM.
 
     Parameters
     ----------
