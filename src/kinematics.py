@@ -18,8 +18,13 @@ import numpy as np
 import ROOT
 from matplotlib.lines import Line2D
 
-from diff_cross_section import _kallen, cos_theta_from_t
-from scattering import _dir_path_finder
+from diff_cross_section import (
+    _kallen,
+    build_pdf_from_graph,
+    cos_theta_from_t,
+    load_graph,
+)
+from scattering import DATA_DIR, PLOT_DIR
 
 # Update matplotlib.pyplot parameters.
 plt.rcParams.update(
@@ -43,6 +48,14 @@ M_N = pdg.GetParticle("neutron").Mass()
 M_PI0 = pdg.GetParticle("pi0").Mass()
 M_ETA = pdg.GetParticle("eta").Mass()
 E_BEAM = 100.0  # GeV
+
+# Precompute PDFs from dsigma/dt graphs
+PDF_PI0 = build_pdf_from_graph(
+    load_graph(str(DATA_DIR / "dsigma_dt_pi0.root"))
+)
+PDF_ETA = build_pdf_from_graph(
+    load_graph(str(DATA_DIR / "dsigma_dt_eta.root"))
+)
 
 
 def build_initial_state():
@@ -224,18 +237,13 @@ def generate_event_from_t(rng, n_samples, channel="pi0"):
     """
     if channel not in {"pi0", "eta"}:
         raise ValueError('channel must be "pi0" or "eta".')
-    data_dir = _dir_path_finder(data=True)
-    if channel == "pi0":
-        m_meson = M_PI0
-        filename = str(data_dir / "dsigma_dt_pi0.root")
-    else:
-        m_meson = M_ETA
-        filename = str(data_dir / "dsigma_dt_eta.root")
 
+    m_meson = M_PI0 if channel == "pi0" else M_ETA
+    pdf = PDF_PI0 if channel == "pi0" else PDF_ETA
     _, _, _, s, beta_cm = build_initial_state()
 
     cos_th_list = cos_theta_from_t(
-        s, M_PI_MINUS, M_P, m_meson, M_N, filename, rng, n_samples
+        s, M_PI_MINUS, M_P, m_meson, M_N, rng, pdf, n_samples
     )
     # Ensure output is a list even for single sample
     if n_samples == 1:
@@ -300,8 +308,6 @@ def plot_kinematics(n_samples, rng):
     rng : np.random.Generator
         Random number generator.
     """
-    plot_dir = _dir_path_finder(data=False)
-
     etas_g1, etas_g2 = {}, {}
     etas_meson = {}
     dRs = {}
@@ -361,7 +367,7 @@ def plot_kinematics(n_samples, rng):
     )
     plt.title("Meson pseudorapidity in LAB")
     plt.tight_layout()
-    plt.savefig(plot_dir / "meson_eta_LAB.pdf", dpi=1200)
+    plt.savefig(PLOT_DIR / "meson_eta_LAB.pdf", dpi=1200)
     plt.close()
 
     # Plot pseudorapidity of the two photons from meson decay
@@ -419,7 +425,7 @@ def plot_kinematics(n_samples, rng):
     )
     ax_eta.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(plot_dir / "gamma_eta_from_meson.pdf", dpi=1200)
+    plt.savefig(PLOT_DIR / "gamma_eta_from_meson.pdf", dpi=1200)
     plt.close()
 
     # Plot deltaR between the two photons from meson decay
@@ -446,7 +452,7 @@ def plot_kinematics(n_samples, rng):
     )
     plt.title(r"$\gamma$ separation from meson decay")
     plt.tight_layout()
-    plt.savefig(plot_dir / "gamma_separation.pdf", dpi=1200)
+    plt.savefig(PLOT_DIR / "gamma_separation.pdf", dpi=1200)
     plt.close()
 
     # Plot energy in LAB of the two photons from meson decay
@@ -520,7 +526,7 @@ def plot_kinematics(n_samples, rng):
     )
     ax_eta.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(plot_dir / "gamma_energy_from_meson.pdf", dpi=1200)
+    plt.savefig(PLOT_DIR / "gamma_energy_from_meson.pdf", dpi=1200)
     plt.close()
 
     # Plot meson energy in LAB
@@ -537,7 +543,7 @@ def plot_kinematics(n_samples, rng):
         alpha=0.6,
         label=r"$\eta$",
     )
-    plt.xlabel(r"$E_X^{LAB}$")
+    plt.xlabel(r"$E_X^{LAB}$ [GeV]")
     plt.ylabel("counts")
     plt.grid(True, alpha=0.3)
     extra_line = [
@@ -555,7 +561,7 @@ def plot_kinematics(n_samples, rng):
     )
     plt.title("Meson energy in LAB")
     plt.tight_layout()
-    plt.savefig(plot_dir / "meson_E_LAB.pdf", dpi=1200)
+    plt.savefig(PLOT_DIR / "meson_E_LAB.pdf", dpi=1200)
     plt.close()
 
 

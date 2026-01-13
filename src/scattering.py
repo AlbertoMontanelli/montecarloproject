@@ -35,16 +35,12 @@ plt.rcParams.update(
     }
 )
 
-
-def _dir_path_finder(data):
-    """Create and return the directory path for saving files."""
-    base_dir = Path(__file__).resolve().parent
-    if data:
-        dir = base_dir / "data"
-    else:
-        dir = base_dir / "plots"
-    dir.mkdir(exist_ok=True)
-    return dir
+# Directories for data and plots
+base_dir = Path(__file__).resolve().parent
+DATA_DIR = base_dir / "data"
+PLOT_DIR = base_dir / "plots"
+DATA_DIR.mkdir(exist_ok=True)
+PLOT_DIR.mkdir(exist_ok=True)
 
 
 class CrossSections:
@@ -232,8 +228,7 @@ def plot_accepted_mc_vs_expected(results, n_events):
     p_mc = acc_mc / n_events
     err_bin = np.sqrt(n_events * p_mc * (1.0 - p_mc))
 
-    plot_dir = _dir_path_finder(data=False)
-    filename = plot_dir / "accepted_counts_mc_vs_expected.pdf"
+    filename = PLOT_DIR / "accepted_counts_mc_vs_expected.pdf"
     plt.figure(figsize=(12, 5), dpi=1200)
     plt.errorbar(
         L,
@@ -277,6 +272,72 @@ def plot_accepted_mc_vs_expected(results, n_events):
         labels + [extra_line[0].get_label()],
     )
 
+    plt.ylabel("Events")
+    plt.yscale("log")
+    plt.title("First interaction counts")
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(filename, dpi=1200)
+    plt.close()
+
+
+def plot_linearity(results, n_events):
+    """
+    Plot accepted counts: MC vs expected with binomial errors.
+
+    Parameters
+    ----------
+    results : dict
+        Output of run_length_scan.
+    n_events : int
+        Number of trials per target length.
+    """
+    lam = CrossSections.lambda_cm()
+    L = results["L_cm"]
+    acc_mc = results["accepted_mc"]
+
+    p_mc = acc_mc / n_events
+    err_bin = np.sqrt(n_events * p_mc * (1.0 - p_mc))
+
+    filename = PLOT_DIR / "linearity.pdf"
+    plt.figure(figsize=(12, 5), dpi=1200)
+    plt.errorbar(
+        L,
+        acc_mc,
+        yerr=err_bin,
+        fmt="o",
+        label="MC interaction counts - binomial errors",
+        markersize=3,
+        elinewidth=1,
+        capsize=4,
+        capthick=1,
+    )
+    x = np.linspace(0, L.max(), 1000)
+    plt.plot(
+        x,
+        n_events * (x / lam),
+        label=(
+            "Interaction counts expected (linear approx):"
+            r" $\frac{L}{\lambda}$"
+        ),
+    )
+
+    extra_line = [
+        Line2D(
+            [],
+            [],
+            color="none",
+            label=(rf"$\lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = 10^7$"),
+        )
+    ]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(
+        handles + extra_line,
+        labels + [extra_line[0].get_label()],
+    )
+
+    plt.xlim(-0.5, 1.1 * L.max())
+    plt.xlabel(r"Target length $L$ [cm]")
     plt.ylabel("Events")
     plt.yscale("log")
     plt.title("First interaction counts")
@@ -344,8 +405,7 @@ def plot_rare_channels(results, cl=0.68):
     pi0_yerr = np.vstack([pi0 - pi0_low, pi0_up - pi0])
     eta_yerr = np.vstack([eta - eta_low, eta_up - eta])
 
-    plot_dir = _dir_path_finder(data=False)
-    filename = plot_dir / "rare_channels.pdf"
+    filename = PLOT_DIR / "rare_channels.pdf"
     plt.figure(figsize=(12, 5))
     plt.errorbar(
         L,
@@ -418,8 +478,7 @@ def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
     x = sample_depth(rng, size=n_samples)
     x_acc = x[x < L_cm]
 
-    plot_dir = _dir_path_finder(data=False)
-    filename = plot_dir / "depth_check.pdf"
+    filename = PLOT_DIR / "depth_check.pdf"
 
     plt.figure(figsize=(12, 5))
     plt.grid()
@@ -470,34 +529,46 @@ def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
     plt.close()
 
 
-def main():
+def main(linear_approx=False):
     """
     Execute the main workflow.
 
     - Create a single RNG with a fixed seed.
     - Run the scan over target lengths.
     - Produce the requested plots.
+
+    Parameters
+    ----------
+    linear_approx : bool
+        If True, run only the linear approximation lengths.
     """
     seed = 42
     rng = np.random.default_rng(seed)
-
-    lengths_cm = np.linspace(
-        CrossSections.lambda_cm() / 10,
-        5 * CrossSections.lambda_cm(),
-        50,
-    )
     n_events = 10_000_000
+    if linear_approx is not True:
+        lengths = np.linspace(
+            CrossSections.lambda_cm() / 10,
+            5 * CrossSections.lambda_cm(),
+            50,
+        )  # cm
+    else:
+        lengths = np.linspace(0.5, 21.5, 21)  # cm
 
     results = run_length_scan(
         rng=rng,
-        lengths_cm=lengths_cm,
+        lengths_cm=lengths,
         n_events=n_events,
     )
 
     print(f"Mean free path lambda = {results['lambda_cm']:.6f} cm")
 
-    plot_accepted_mc_vs_expected(results, n_events=n_events)
-    plot_rare_channels(results)
+    if linear_approx is not True:
+        plot_accepted_mc_vs_expected(results, n_events=n_events)
+        plot_rare_channels(results)
+
+    else:
+        plot_linearity(results, n_events=n_events)
+
     plot_depth_histogram(
         rng=rng,
         L_cm=CrossSections.lambda_cm(),
@@ -507,4 +578,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    for linear_approx in [False, True]:
+        main(linear_approx=linear_approx)

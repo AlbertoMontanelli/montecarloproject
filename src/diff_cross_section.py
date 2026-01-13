@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import ROOT
 
-from scattering import _dir_path_finder
+from scattering import DATA_DIR, PLOT_DIR
 
 # Update matplotlib.pyplot parameters.
 plt.rcParams.update(
@@ -118,11 +118,11 @@ def build_pdf_from_graph(g):
     # Build CDF
     cdf: list[float] = []
     acc = 0.0
+    tot = sum(w)
     for wi in w:
-        acc += wi / sum(w)
+        acc += wi / tot
         cdf.append(acc)
     cdf[-1] = 1.0  # numerical robustness
-
     return DtPdf(tau_lo=tau_lo, tau_hi=tau_hi, cdf=cdf)
 
 
@@ -224,7 +224,7 @@ def plot_binned_pdf_cdf(pdf, rng, n_samples, plot_name="pi0"):
     t_samples = sample_t(pdf, rng, size=n_samples)
     tau_samples = -np.asarray(t_samples, dtype=float)
 
-    # Use the *same binning* as the table for a clean comparison
+    # Use the same binning as the table for a clean comparison
     ax_pdf.hist(
         tau_samples,
         bins=edges,
@@ -248,9 +248,8 @@ def plot_binned_pdf_cdf(pdf, rng, n_samples, plot_name="pi0"):
     plt.tight_layout()
 
     # Save figure
-    plot_dir = _dir_path_finder(data=False)
     fig_name = f"{plot_name}_dt_pdf_cdf.pdf"
-    plt.savefig(plot_dir / fig_name, dpi=1200)
+    plt.savefig(PLOT_DIR / fig_name, dpi=1200)
     plt.close()
 
 
@@ -259,7 +258,7 @@ def _kallen(x, y, z):
     return x * x + y * y + z * z - 2 * x * y - 2 * x * z - 2 * y * z
 
 
-def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
+def cos_theta_from_t(s, m_a, m_b, m_c, m_d, rng, pdf, n_samples=1000):
     """
     Convert Mandelstam t -> cos(theta*) in the CM frame for a+b -> c+d.
 
@@ -274,10 +273,10 @@ def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
         Mandelstam s in (GeV)^2.
     m_a, m_b, m_c, m_d : float
         Particle masses in GeV.
-    filename : str
-        Path to the ROOT file containing the dsigma/dt table.
     rng : np.random.Generator
         Random number generator.
+    pdf : DtPdf
+        Precomputed PDF and CDF for t sampling.
     n_samples : int
         Number of samples to generate.
     Returns
@@ -285,8 +284,6 @@ def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
     cos_theta : float or np.ndarray
         cos(theta*) corresponding to t.
     """
-    g = load_graph(filename)
-    pdf = build_pdf_from_graph(g)
     t_samples = sample_t(pdf, rng, size=n_samples)
 
     sqrt_s = np.sqrt(s)
@@ -315,20 +312,17 @@ def cos_theta_from_t(s, m_a, m_b, m_c, m_d, filename, rng, n_samples=1000):
 
 
 if __name__ == "__main__":
-    data_dir = _dir_path_finder(data=True)
     filenames = [
-        str(data_dir / "dsigma_dt_pi0.root"),
-        str(data_dir / "dsigma_dt_eta.root"),
+        str(DATA_DIR / "dsigma_dt_pi0.root"),
+        str(DATA_DIR / "dsigma_dt_eta.root"),
     ]
     plot_names = ["pi0", "eta"]
 
-    seed = 42
-    rng = np.random.default_rng(seed)
-    n_samples = 100_000
+    rng = np.random.default_rng(42)
 
     for f, plot_name in zip(filenames, plot_names):
         g = load_graph(f)
         pdf = build_pdf_from_graph(g)
         plot_binned_pdf_cdf(
-            pdf, rng=rng, n_samples=n_samples, plot_name=plot_name
+            pdf, rng=rng, n_samples=100_000, plot_name=plot_name
         )

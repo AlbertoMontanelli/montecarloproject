@@ -199,7 +199,7 @@ def smear_energy(rng, E_GeV, a=0.12, b=0.02, c=0.0, path_length=None):
     b_eff = b
     if path_length is not None:
         mat_length = path_length / LAMBDA_PAIR if LAMBDA_PAIR > 0.0 else 0.0
-        _k_E = 0.1  # Strength of material-dependent smearing term
+        _k_E = 0.01  # Strength of material-dependent smearing term
         t = max(float(mat_length), 0.0)
         b_eff = float(np.sqrt(b * b + (_k_E * t) * (_k_E * t)))
 
@@ -209,7 +209,7 @@ def smear_energy(rng, E_GeV, a=0.12, b=0.02, c=0.0, path_length=None):
     return max(E_meas, 0.0)
 
 
-def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.5, path_length=None):
+def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.2, path_length=None):
     """
     Gaussian smearing of the shower centroid on calo plane.
 
@@ -236,7 +236,7 @@ def smear_position(rng, x_cm, y_cm, sigma_xy_cm=0.5, path_length=None):
     sigma_eff = sigma_xy_cm
     if path_length is not None:
         mat_length = path_length / LAMBDA_PAIR if LAMBDA_PAIR > 0.0 else 0.0
-        _k_xy = 1.0  # Strength of material-dependent smearing term
+        _k_xy = 0.1  # Strength of material-dependent smearing term
         t = max(float(mat_length), 0.0)
         sigma_eff = sigma_xy_cm * (1.0 + _k_xy * t)
 
@@ -301,16 +301,16 @@ def detect_two_photons(
     g2_lab,
     z_vtx_cm,
     L_cm,
-    z_cal_cm,
-    R_calo_cm,
-    R_tgt_cm,
+    z_cal_cm=1000.0,
+    R_calo_cm=100.0,
+    R_tgt_cm=10.0,
     E_thr_GeV=0.1,
     deltaR_min=0.02,
-    sigma_xy_cm=0.5,
+    sigma_xy_cm=0.2,
     res_a=0.12,
-    res_b=0.02,
-    en_material_smearing=False,
-    xy_material_smearing=False,
+    res_b=0.01,
+    en_material_smearing=True,
+    xy_material_smearing=True,
 ):
     """
     Full detection chain for two photons.
