@@ -73,10 +73,10 @@ def compute_window_counts(h, m0, sigma, nsig=2.0):
 
     err = ctypes.c_double()
     # IntegralAndError consider weighted histograms correctly
-    n = h.IntegralAndError(b1, b2, err)
+    N = h.IntegralAndError(b1, b2, err)
 
     return {
-        "n": float(n),
+        "N": float(N),
         "err": float(err.value),
         "low": float(low),
         "high": float(high),
@@ -85,7 +85,9 @@ def compute_window_counts(h, m0, sigma, nsig=2.0):
     }
 
 
-def fit_meson_peak(h, m_meson, L, k_range=2, n_iter=2, suffix=None):
+def fit_meson_peak(
+    h, m_meson, L, k_range=2, n_iter=2, do_plot=False, suffix=None
+):
     """
     Fit the meson peak and plot the results.
 
@@ -106,6 +108,8 @@ def fit_meson_peak(h, m_meson, L, k_range=2, n_iter=2, suffix=None):
         Fit range is mu ± k_range*sigma.
     n_iter : int
         Number of fit iterations to refine mu and sigma.
+    do_plot : bool
+        If True, create and save a plot of the fit.
     suffix : str or None
         Optional suffix for output files.
 
@@ -149,6 +153,20 @@ def fit_meson_peak(h, m_meson, L, k_range=2, n_iter=2, suffix=None):
         h.Fit(f, "ILRSQ")
         mu_guess = float(f.GetParameter(1))
         sigma_guess = abs(float(f.GetParameter(2)))
+
+    # Return fit results
+    out = {
+        "mu": mu_guess,
+        "mu_err": float(f.GetParError(1)),
+        "sigma": sigma_guess,
+        "sigma_err": float(f.GetParError(2)),
+        "chi2": float(f.GetChisquare()),
+        "ndf": int(f.GetNDF()),
+        "fit_range": (float(xmin_fit), float(xmax_fit)),
+    }
+
+    if not do_plot:
+        return out
 
     # Plot with final fit results
     c = ROOT.TCanvas(
@@ -236,17 +254,34 @@ def fit_meson_peak(h, m_meson, L, k_range=2, n_iter=2, suffix=None):
     )
     c.SaveAs(fname)
 
-    # Return fit results
-    out = {
-        "mu": mu_guess,
-        "mu_err": float(f.GetParError(1)),
-        "sigma": sigma_guess,
-        "sigma_err": float(f.GetParError(2)),
-        "chi2": float(f.GetChisquare()),
-        "ndf": int(f.GetNDF()),
-        "fit_range": (float(xmin_fit), float(xmax_fit)),
-    }
     return out
+
+
+def make_poisson_bootstrap_hist(h, rng):
+    """
+    Create a Poisson bootstrap replica of an unweighted TH1.
+
+    For each bin i: n_i* ~ Poisson(n_i).
+
+    Parameters
+    ----------
+    h : ROOT.TH1
+        Input histogram (unweighted).
+    rng : numpy.random.Generator
+        Random number generator.
+    """
+    h_boot = h.Clone(f"{h.GetName()}_boot")
+    h_boot.SetDirectory(0)
+    h_boot.Reset("ICES")  # reset contents + errors
+
+    nb = h.GetNbinsX()
+    for i in range(1, nb + 1):
+        n = h.GetBinContent(i)
+        n_int = int(round(n)) if n > 0 else 0
+        n_star = rng.poisson(n_int)
+        h_boot.SetBinContent(i, float(n_star))
+
+    return h_boot
 
 
 def compute_significance(S, B, kind="asymptotic"):
@@ -539,7 +574,7 @@ def plot_normalized_histograms(suffix=None, logy=False):
         logger.info(f"Plotted normalized overlays for L={L:.2f} cm")
 
 
-def scan_target_length(suffix=None):
+def scan_target_length(suffix=None, rng=None, n_boot=100):
     """
     Scan target thickness and compute efficiencies and significances.
 
@@ -547,6 +582,10 @@ def scan_target_length(suffix=None):
     ----------
     suffix : str or None
         Optional suffix for input files.
+    rng : numpy.random.Generator
+        Random number generator for Poisson bootstrap (if enabled).
+    n_boot : int
+        Number of bootstrap replicas to perform.
 
     Returns
     -------
@@ -573,11 +612,17 @@ def scan_target_length(suffix=None):
     eff_eta = []
     eff_bkg = []
     S_pi0 = []
+    S_pi0_err = []
     B_pi0 = []
+    B_pi0_err = []
     Z_pi0 = []
+    Z_pi0_err = []
     S_eta = []
+    S_eta_err = []
     B_eta = []
+    B_eta_err = []
     Z_eta = []
+    Z_eta_err = []
     sigma_pi0 = []
     sigma_eta = []
     sigma_pi0_err = []
@@ -591,46 +636,121 @@ def scan_target_length(suffix=None):
 
             # Fit resolution on signal-only
             fit_meson = fit_meson_peak(
-                h=h_meson, m_meson=m_meson, L=L, suffix=suffix
+                h=h_meson, m_meson=m_meson, L=L, suffix=suffix, do_plot=True
             )
-            mu = fit_meson["mu"]
-            sigma = fit_meson["sigma"]
-            sigma_err = fit_meson["sigma_err"]
+            mu0 = fit_meson["mu"]
+            sigma0 = fit_meson["sigma"]
 
             # Create weighted histogram for signal and background
-            w = (
+            w_sig = (
                 meta_pi0[i]["w_phys"]
                 if meson == "pi0"
                 else meta_eta[i]["w_phys"]
             )
-            h_meson_weighted = h_meson.Clone()
-            h_meson_weighted.Scale(w)
-            h_bkg_weighted = h_bkg.Clone()
-            h_bkg_weighted.Scale(meta_bkg[i]["w_phys"])
+            w_bkg = meta_bkg[i]["w_phys"]
 
             # Count events in adaptive window +/- nsig*sigma
-            win_sig = compute_window_counts(h_meson_weighted, mu, sigma)
-            win_bkg = compute_window_counts(h_bkg_weighted, mu, sigma)
+            win_sig = compute_window_counts(h_meson, mu0, sigma0)
+            win_bkg = compute_window_counts(h_bkg, mu0, sigma0)
 
-            # Compute physical expected yields
-            S = win_sig["n"]
-            B = win_bkg["n"]
-            Z = compute_significance(S, B, kind="asymptotic")
+            # Raw counts in window (oversampled)
+            S0_raw = win_sig["N"]
+            B0_raw = win_bkg["N"]
+
+            # Physical expected yields (scale AFTER counting)
+            S0 = w_sig * S0_raw
+            B0 = w_bkg * B0_raw
+
+            Z0 = compute_significance(S0, B0, kind="asymptotic")
+
+            # --- Bootstrap ---
+            sigma_boot_err = 0.0
+            Z_boot_err = 0.0
+
+            sigma_list = []
+            Z_list = []
+            S_list = []
+            B_list = []
+            N_fail = 0
+
+            for _ in range(n_boot):
+                h_meson_bootstrap = make_poisson_bootstrap_hist(h_meson, rng)
+                h_bkg_bootstrap = make_poisson_bootstrap_hist(h_bkg, rng)
+
+                fit_bootstrap = fit_meson_peak(
+                    h=h_meson_bootstrap,
+                    m_meson=m_meson,
+                    L=L,
+                    k_range=2,
+                    n_iter=2,
+                    suffix=suffix,
+                    do_plot=False,
+                )
+                mu_bootstrap = fit_bootstrap["mu"]
+                sigma_bootstrap = fit_bootstrap["sigma"]
+
+                if (
+                    not np.isfinite(mu_bootstrap)
+                    or not np.isfinite(sigma_bootstrap)
+                    or sigma_bootstrap <= 0
+                ):
+                    N_fail += 1
+                    continue
+
+                win_sig_bootstrap = compute_window_counts(
+                    h_meson_bootstrap, mu_bootstrap, sigma_bootstrap
+                )
+                win_bkg_bootstrap = compute_window_counts(
+                    h_bkg_bootstrap, mu_bootstrap, sigma_bootstrap
+                )
+
+                S_bootstrap = w_sig * win_sig_bootstrap["N"]
+                B_bootstrap = w_bkg * win_bkg_bootstrap["N"]
+
+                if S_bootstrap < 0 or B_bootstrap < 0:
+                    N_fail += 1
+                    continue
+
+                Z_bootstrap = compute_significance(
+                    S_bootstrap, B_bootstrap, kind="asymptotic"
+                )
+
+                sigma_list.append(sigma_bootstrap)
+                Z_list.append(Z_bootstrap)
+                S_list.append(S_bootstrap)
+                B_list.append(B_bootstrap)
+
+            sigma_boot_err = float(np.std(sigma_list, ddof=1))
+            Z_boot_err = float(np.std(Z_list, ddof=1))
+            S_boot_err = float(np.std(S_list, ddof=1))
+            B_boot_err = float(np.std(B_list, ddof=1))
+            logger.info(
+                f"L={L:.2f} cm, meson={meson}: "
+                f"Bootstrap failures: {N_fail}/{n_boot}, "
+                f"sigma error = {sigma_boot_err * 1000:.4f} MeV, "
+                f"Z error = {Z_boot_err:.6f}"
+            )
 
             if meson == "pi0":
                 eff_pi0.append(meta_pi0[i]["N_reco"] / meta_pi0[i]["N_gen"])
-                S_pi0.append(S)
-                B_pi0.append(B)
-                Z_pi0.append(Z)
-                sigma_pi0.append(sigma)
-                sigma_pi0_err.append(sigma_err)
+                S_pi0.append(S0)
+                S_pi0_err.append(S_boot_err)
+                B_pi0.append(B0)
+                B_pi0_err.append(B_boot_err)
+                Z_pi0.append(Z0)
+                Z_pi0_err.append(Z_boot_err)
+                sigma_pi0.append(sigma0)
+                sigma_pi0_err.append(sigma_boot_err)
             else:
                 eff_eta.append(meta_eta[i]["N_reco"] / meta_eta[i]["N_gen"])
-                S_eta.append(S)
-                B_eta.append(B)
-                Z_eta.append(Z)
-                sigma_eta.append(sigma)
-                sigma_eta_err.append(sigma_err)
+                S_eta.append(S0)
+                S_eta_err.append(S_boot_err)
+                B_eta.append(B0)
+                B_eta_err.append(B_boot_err)
+                Z_eta.append(Z0)
+                Z_eta_err.append(Z_boot_err)
+                sigma_eta.append(sigma0)
+                sigma_eta_err.append(sigma_boot_err)
 
     results = {
         "L_values": L_values,
@@ -641,11 +761,17 @@ def scan_target_length(suffix=None):
         "eff_eta": eff_eta,
         "eff_bkg": eff_bkg,
         "S_pi0": S_pi0,
+        "S_pi0_err": S_pi0_err,
         "B_pi0": B_pi0,
+        "B_pi0_err": B_pi0_err,
         "Z_pi0": Z_pi0,
+        "Z_pi0_err": Z_pi0_err,
         "S_eta": S_eta,
+        "S_eta_err": S_eta_err,
         "B_eta": B_eta,
+        "B_eta_err": B_eta_err,
         "Z_eta": Z_eta,
+        "Z_eta_err": Z_eta_err,
         "sigma_pi0": sigma_pi0,
         "sigma_pi0_err": sigma_pi0_err,
         "sigma_eta": sigma_eta,
@@ -686,35 +812,99 @@ def plot_significance(meson="pi0", suffix=None):
 
     L = np.array(results["L_values"], dtype=float)
     Z = np.array(results[f"Z_{meson}"], dtype=float)
+    Z_err = np.array(results[f"Z_{meson}_err"], dtype=float)
     S = np.array(results[f"S_{meson}"], dtype=float)
+    S_err = np.array(results[f"S_{meson}_err"], dtype=float)
     B = np.array(results[f"B_{meson}"], dtype=float)
-    purity = S / (S + B)
+    B_err = np.array(results[f"B_{meson}_err"], dtype=float)
+    rel_S = S_err / S
+    rel_B = B_err / B
 
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1, sharex=True, figsize=(8, 6), constrained_layout=True
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        3, 1, sharex=True, figsize=(8, 8), constrained_layout=True
     )
+
+    # Panel 1: Z(L)
     ax1.set_title(f"Significance and purity for {meson_name}")
-    # Top: Z(L)
     ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     ax1.tick_params(labelbottom=False)
     ax1.set_ylabel(r"Significance $Z(L)$")
-    ax1.plot(
+    ax1.errorbar(
         L,
         Z,
-        "o-",
+        yerr=Z_err,
+        fmt="o",
+        color="blue",
         label=r"$Z(L)=$"
         r"$\sqrt{2\left[(S+B)\log\left(1+ \frac{S}{B}\right)-S\right]}$",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
     )
+    ax1.plot([], [], " ", label="Errors: Poisson bootstrap std. dev.")
     ax1.grid(True)
     ax1.legend()
+    # Reorder legend to put errors last
+    handles, labels = ax1.get_legend_handles_labels()
+    idx = labels.index("Errors: Poisson bootstrap std. dev.")
+    handles.append(handles.pop(idx))
+    labels.append(labels.pop(idx))
+    ax1.legend(handles, labels)
 
-    # Bottom: S/B (L)
-    ax2.set_xlabel("Target thickness L [cm]")
-    ax2.set_ylabel(r"Purity $P(L)$")
-    ax2.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    ax2.plot(L, purity, "o-", color="orange", label=r"$P(L)=\frac{S}{S+B}$")
+    # Panel 2: S and B (L)
+    ax2.tick_params(labelbottom=False)
+    ax2.set_ylabel(r"$S(L)$ and $B(L)$")
+    ax2.set_yscale("log")
+    ax2.errorbar(
+        L,
+        B,
+        yerr=B_err,
+        fmt="o",
+        color="#D55E00",
+        label=r"$B(L) \pm$ Poisson bootstrap std. dev.",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
+    )
+    ax2.errorbar(
+        L,
+        S,
+        yerr=S_err,
+        fmt="o",
+        color="green",
+        label=r"$S(L) \pm$ Poisson bootstrap std. dev.",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
+    )
     ax2.grid(True)
     ax2.legend()
+
+    # --- Panel 3: Relative uncertainties ---
+    ax3.set_xlabel("Target thickness L [cm]")
+    ax3.set_ylabel(r"Relative uncertainty")
+    ax3.errorbar(
+        L,
+        rel_B,
+        fmt="o",
+        color="#D55E00",
+        label=r"$\delta B/B$",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
+    )
+    ax3.errorbar(
+        L,
+        rel_S,
+        fmt="o",
+        color="green",
+        label=r"$\delta S/S$",
+        markersize=4,
+        capsize=3,
+        elinewidth=1,
+    )
+    ax3.grid(True)
+    ax3.legend()
 
     dir = PLOT_DIR / (
         f"significance_{meson}_{suffix}.pdf"
@@ -766,7 +956,7 @@ def plot_sigma(meson="pi0", suffix=None):
         sigma * 1e3,
         yerr=sigma_err * 1e3,
         fmt="o",
-        label=r"$\sigma_{m_{\gamma\gamma}}$",
+        label=r"$\sigma_{m_{\gamma\gamma}} \pm$ Poisson bootstrap std. dev.",
         markersize=4,
         capsize=3,
         elinewidth=1,
@@ -881,7 +1071,8 @@ def main():
     )
     args = parser.parse_args()
     if args.scan == "True":
-        scan_target_length(suffix=args.suffix)
+        rng = np.random.default_rng(seed=42)
+        scan_target_length(suffix=args.suffix, rng=rng, n_boot=100)
     if args.plot == "True":
         mesons = [args.meson] if isinstance(args.meson, str) else args.meson
         for meson in mesons:
