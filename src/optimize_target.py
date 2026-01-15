@@ -1,7 +1,12 @@
 """
-Use metrics to scan target length.
+Optimize target thickness for neutral meson reconstruction.
 
-Plot the results.
+Scan different target lengths L: fit the meson peaks in the m(gg)
+histograms, and extract relevant metrics such as mass resolution,
+reconstruction efficiency, signal/background estimates, and
+significance. Use Poisson bootstrap to estimate uncertainties on these
+quantities. Also provide functions to plot the oversampled background
+histograms, normalized m(gg) spectra overlays, and the scan results.
 """
 
 import argparse
@@ -259,7 +264,7 @@ def fit_meson_peak(
 
 def make_poisson_bootstrap_hist(h, rng):
     """
-    Create a Poisson bootstrap replica of an unweighted TH1.
+    Create a Poisson bootstrap replica of an unweighted histogram.
 
     For each bin i: n_i* ~ Poisson(n_i).
 
@@ -578,6 +583,17 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
     """
     Scan target thickness and compute efficiencies and significances.
 
+    To each target thickness L, compute:
+
+    - Fitted mass resolution on signal-only spectra.
+    - Counts in adaptive +/- nsig*sigma window.
+    - Reconstruction efficiencies for pi0, eta, and background in the
+      window.
+    - Signal (S), background (B), and significance (Z) for pi0 and eta
+      in the window.
+    Use Poisson bootstrap to estimate uncertainties on S, B, Z, and
+    sigma.
+
     Parameters
     ----------
     suffix : str or None
@@ -790,7 +806,10 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
 
 def plot_significance(meson="pi0", suffix=None):
     """
-    Plot significance and purity vs target thickness after scan.
+    Plot significance, signal, and background after scan.
+
+    Plot those metrics vs target thickness L, with error bars from
+    Poisson bootstrap and visualize relative uncertainties.
 
     Parameters
     ----------
@@ -917,6 +936,9 @@ def plot_significance(meson="pi0", suffix=None):
 def plot_sigma(meson="pi0", suffix=None):
     """
     Plot mass resolution and efficiency vs target thickness after scan.
+
+    Mass resolution error bars are from Poisson bootstrap, efficiency
+    error bars are binomial.
 
     Parameters
     ----------
