@@ -1,28 +1,17 @@
 """
-Optimization of target thickness for pi- p interactions.
+Generate oversampled signal and background histograms for meson decays.
 
-Goal: maximize significance and resolution of pi0 and eta peaks in the
-two-photon invariant mass spectrum.
-For each target thickness L:
-
-- Simulate N_pi- interactions in the target of thickness L.
-- For each interaction, sample the channel according to cross sections.
-- For "other" channels, generate a toy background of two uncorrelated
-  photons (log-uniform energy, uniform forward direction).
-- For pi0 and eta channels, generate forced decays to two photons.
-- Simulate detection, reconstruction, and selection of the two photons.
-- Fill weighted histograms for pi0 and eta signals, and unweighted
-  histogram for background.
-- Fit the pi0 and eta peaks in the forced signal histograms to extract
-  the mass resolution sigma_m.
-- Integrate counts in +/- n*sigma_m windows around the nominal meson
-  masses in the weighted histograms to get expected S and B and compute
-  the significance S/sqrt(B).
-
-Finally, plot the significance and mass resolution vs target thickness
-L.
+For each target thickness L, with a given number of incident pi-,
+compute the expected number of true interactions producing pi0, eta,
+and other background events. Then, generate oversampled histograms for
+the signal (pi0 and eta decays to two photons) and background (two
+uncorrelated photons) processes with weights given by the ratio of
+expected to generated events. The histograms and metadata are saved
+to ROOT and JSON files, respectively. The generation includes detector
+effects and acceptance on the measured photon energies and directions.
 """
 
+import argparse
 import json
 
 import numpy as np
@@ -188,7 +177,7 @@ def oversampled_background(N_bkg, L_cm, rng, N_pions):
     Parameters
     ----------
     N_bkg : int
-        Number of background events to simulate.
+        Number of oversampled background events to simulate.
     L_cm : float
         Target thickness (cm).
     rng : np.random.Generator
@@ -253,7 +242,7 @@ def oversampled_signal(N_sig, channel, L_cm, rng, N_pions):
     Parameters
     ----------
     N_sig : int
-        Number of forced signal events to generate.
+        Number of oversampled signal events to generate.
     channel : str
         "pi0" or "eta".
     L_cm : float
@@ -331,9 +320,10 @@ def save_histograms(
     N_gen_bkg=10_000,
     N_gen_pi0=10_000,
     N_gen_eta=10_000,
+    suffix=None,
 ):
     """
-    Compute and save signal and background histograms for each L.
+    Generate and save signal and background histograms for each L.
 
     Parameters
     ----------
@@ -347,6 +337,8 @@ def save_histograms(
         Number of pi0 oversampled events to generate per interaction.
     N_gen_eta : int
         Number of eta oversampled events to generate per interaction.
+    suffix : str or None
+        Optional suffix for output files.
     """
     if isinstance(L_values, (int, float)):
         L_values = [L_values]
@@ -355,7 +347,12 @@ def save_histograms(
     results_eta = []
     results_bkg = []
 
-    dir = str(DATA_DIR / "histogram.root")
+    dir = (
+        str(DATA_DIR / f"histograms_{suffix}.root")
+        if suffix
+        else str(DATA_DIR / "histograms.root")
+    )
+
     f = ROOT.TFile(dir, "RECREATE")
 
     for L in L_values:
@@ -385,17 +382,115 @@ def save_histograms(
     f.Close()
 
     logger.info("Writing on ROOT file completed. Saving metadata")
-    with open(DATA_DIR / "metadata_pi0.json", "w") as f:
-        json.dump(results_pi0, f, indent=2)
-    with open(DATA_DIR / "metadata_eta.json", "w") as f:
-        json.dump(results_eta, f, indent=2)
-    with open(DATA_DIR / "metadata_bkg.json", "w") as f:
-        json.dump(results_bkg, f, indent=2)
+    for results, name in zip(
+        [results_pi0, results_eta, results_bkg], ["pi0", "eta", "bkg"]
+    ):
+        dir = DATA_DIR / (
+            f"metadata_{name}_{suffix}.json"
+            if suffix
+            else f"metadata_{name}.json"
+        )
+        with open(dir, "w") as f:
+            json.dump(results, f, indent=2)
     logger.info("Metadata saved on json files")
 
 
+def main():
+    """
+    Execute the event generation with command-line arguments.
+
+    CLI Parameters
+    --------------
+    --seed : int
+        Random seed for reproducibility.
+    --suffix : str or None
+        Optional suffix for input/output files.
+    --N_pions : int
+        Number of incident pi- to simulate per target length.
+    --N_gen_bkg : int
+        Number of background oversampled events to generate.
+    --N_gen_pi0 : int
+        Number of pi0 oversampled events to generate.
+    --N_gen_eta : int
+        Number of eta oversampled events to generate.
+    --L_values : list of float
+        List of target thickness values to simulate (cm).
+    --L_range : float float int
+        If set, override L_values with a linspace from Lmin to Lmax
+        with N points.
+    """
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--seed",
+        default="42",
+        type=int,
+        help="Random seed for reproducibility.",
+    )
+    parser.add_argument(
+        "--suffix",
+        default=None,
+        help=("Optional suffix for input/output files."),
+    )
+    parser.add_argument(
+        "--N_pions",
+        type=int,
+        default=100_000,
+        help="Number of incident pi- to simulate per target length.",
+    )
+    parser.add_argument(
+        "--N_gen_bkg",
+        type=int,
+        default=10_000,
+        help="Number of background events to generate per interaction.",
+    )
+    parser.add_argument(
+        "--N_gen_pi0",
+        type=int,
+        default=10_000,
+        help="Number of pi0 events to generate per interaction.",
+    )
+    parser.add_argument(
+        "--N_gen_eta",
+        type=int,
+        default=10_000,
+        help="Number of eta events to generate per interaction.",
+    )
+    parser.add_argument(
+        "--L_values",
+        nargs="+",
+        type=float,
+        default=np.linspace(0.5, 20.5, 21),
+        help="List of target thickness values to simulate (cm).",
+    )
+    parser.add_argument(
+        "--L_range",
+        nargs=3,
+        type=float,
+        default=None,
+        help=(
+            "If set, override L_values with a linspace from Lmin to Lmax with"
+            "N points."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    if args.L_range is not None:
+        Lmin, Lmax, N = args.L_range
+        args.L_values = np.linspace(Lmin, Lmax, int(N))
+    rng = np.random.default_rng(args.seed)
+
+    save_histograms(
+        L_values=args.L_values,
+        rng=rng,
+        N_pions=args.N_pions,
+        N_gen_bkg=args.N_gen_bkg,
+        N_gen_pi0=args.N_gen_pi0,
+        N_gen_eta=args.N_gen_eta,
+        suffix=args.suffix,
+    )
+
+
 if __name__ == "__main__":
-    L_values = np.linspace(0.5, 20.5, 21)  # cm
-    seed = 42
-    rng = np.random.default_rng(seed)
-    save_histograms(L_values, rng)
+    main()
