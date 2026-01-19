@@ -1,0 +1,81 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: "3.9"
+          channels: conda-forge
+          activate-environment: myrootenv
+
+      - name: Create env and install ROOT
+        shell: bash -l {0}
+        run: |
+          conda create -y -n myrootenv python=3.9 -c conda-forge
+          conda activate myrootenv
+          conda install -y -c conda-forge root
+          python - <<'PY'
+          import ROOT
+          print("ROOT OK")
+          import pythia8
+          print("Pythia8 OK")
+          PY
+
+      - name: Install package with docs extras
+        shell: bash -l {0}
+        run: |
+          conda activate myrootenv
+          python -m pip install --upgrade pip
+          pip install -e .[docs]
+
+      - name: Generate API RST via sphinx-apidoc
+        shell: bash -l {0}
+        run: |
+          conda activate myrootenv
+          sphinx-apidoc -f -e -o docs/_api --tocfile modules ./src
+
+      - name: Build HTML docs
+        shell: bash -l {0}
+        env:
+          MPLBACKEND: Agg
+        run: |
+          conda activate myrootenv
+          sphinx-build -b html docs docs/_build/html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
