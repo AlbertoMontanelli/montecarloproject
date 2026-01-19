@@ -10,7 +10,6 @@ Provide functionality to:
 """
 
 import ctypes
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,22 +32,23 @@ plt.rcParams.update(
 )
 
 
-@dataclass
 class DtPdf:
-    """
-    Piecewise-constant PDF built from a binned dsigma/dt table.
+    """Piecewise-constant PDF built from a binned dsigma/dt table."""
 
-    Attributes
-    ----------
-    tau_lo, tau_hi:
-        Bin edges for tau=-t in GeV^2.
-    cdf:
-        Cumulative distribution normalized to 1, same length as bins.
-    """
+    def __init__(self, tau_lo, tau_hi, cdf):
+        """
+        Class constructor.
 
-    tau_lo: list[float]
-    tau_hi: list[float]
-    cdf: list[float]
+        Parameters
+        ----------
+        tau_lo, tau_hi
+            Bin edges for tau = -t in GeV^2.
+        cdf
+            Cumulative distribution normalized to 1, same length as bins.
+        """
+        self.tau_lo = tau_lo
+        self.tau_hi = tau_hi
+        self.cdf = cdf
 
 
 def load_graph(root_path):

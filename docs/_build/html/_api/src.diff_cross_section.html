@@ -117,32 +117,20 @@
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">src.diff_cross_section.</span></span><span class="sig-name descname"><span class="pre">DtPdf</span></span><a class="reference internal" href="../_modules/src/diff_cross_section.html#DtPdf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.diff_cross_section.DtPdf" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf'"><span>#</span></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Piecewise-constant PDF built from a binned dsigma/dt table.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">tau_lo,</span> <span class="pre">tau_hi</span></span></dt>
-<dd><p>Bin edges for tau=-t in GeV^2.</p>
-</dd></dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="src.diff_cross_section.DtPdf.cdf">
-<span class="sig-name descname"><span class="pre">cdf</span></span><a class="headerlink" href="#src.diff_cross_section.DtPdf.cdf" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf.cdf'"><span>#</span></a></dt>
-<dd><p>Cumulative distribution normalized to 1, same length as bins.</p>
-</dd></dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="src.diff_cross_section.DtPdf.tau_lo">
-<span class="sig-name descname"><span class="pre">tau_lo</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code><span class="pre">]</span></em><a class="headerlink" href="#src.diff_cross_section.DtPdf.tau_lo" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf.tau_lo'"><span>#</span></a></dt>
-<dd></dd></dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="src.diff_cross_section.DtPdf.tau_hi">
-<span class="sig-name descname"><span class="pre">tau_hi</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code><span class="pre">]</span></em><a class="headerlink" href="#src.diff_cross_section.DtPdf.tau_hi" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf.tau_hi'"><span>#</span></a></dt>
-<dd></dd></dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">cdf</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code><span class="pre">[</span><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code><span class="pre">]</span></em><a class="headerlink" href="#id0" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#id0'"><span>#</span></a></dt>
-<dd></dd></dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="src.diff_cross_section.DtPdf.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tau_lo</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau_hi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cdf</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.diff_cross_section.DtPdf.__init__" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf.__init__'"><span>#</span></a></dt>
-<dd></dd></dl>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tau_lo</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau_hi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cdf</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/src/diff_cross_section.html#DtPdf.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.diff_cross_section.DtPdf.__init__" title="Link to this definition" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#src.diff_cross_section.DtPdf.__init__'"><span>#</span></a></dt>
+<dd><p>Class constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tau_lo</strong> – Bin edges for tau = -t in GeV^2.</p></li>
+<li><p><strong>tau_hi</strong> – Bin edges for tau = -t in GeV^2.</p></li>
+<li><p><strong>cdf</strong> – Cumulative distribution normalized to 1, same length as bins.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 </dd></dl>
 <dl class="py function">
 <dt class="sig sig-object py" id="src.diff_cross_section.load_graph">
@@ -246,10 +234,6 @@ generation.</p></li>
 <div class="sticky top-16 -mt-10 max-h-[calc(100vh-5rem)] overflow-y-auto pt-6 space-y-2"><p class="font-medium">On this page</p>
 <ul>
 <li><a :data-current="activeSection === '#src.diff_cross_section.DtPdf'" class="reference internal" href="#src.diff_cross_section.DtPdf"><code class="docutils literal notranslate"><span class="pre">DtPdf</span></code></a><ul>
-<li><a :data-current="activeSection === '#src.diff_cross_section.DtPdf.cdf'" class="reference internal" href="#src.diff_cross_section.DtPdf.cdf"><code class="docutils literal notranslate"><span class="pre">DtPdf.cdf</span></code></a></li>
-<li><a :data-current="activeSection === '#src.diff_cross_section.DtPdf.tau_lo'" class="reference internal" href="#src.diff_cross_section.DtPdf.tau_lo"><code class="docutils literal notranslate"><span class="pre">DtPdf.tau_lo</span></code></a></li>
-<li><a :data-current="activeSection === '#src.diff_cross_section.DtPdf.tau_hi'" class="reference internal" href="#src.diff_cross_section.DtPdf.tau_hi"><code class="docutils literal notranslate"><span class="pre">DtPdf.tau_hi</span></code></a></li>
-<li><a :data-current="activeSection === '#id0'" class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">DtPdf.cdf</span></code></a></li>
 <li><a :data-current="activeSection === '#src.diff_cross_section.DtPdf.__init__'" class="reference internal" href="#src.diff_cross_section.DtPdf.__init__"><code class="docutils literal notranslate"><span class="pre">DtPdf.__init__()</span></code></a></li>
 </ul>
 </li>

@@ -47,7 +47,7 @@ python optimize_target.py \
   --scan True
 ```
 
-Perform the target length scan and save results in a JSON file (default `metrics.json`).
+This perform the target length scan and save results in a JSON file (default `metrics.json`).
 
 To use the found results from the scan and visualize the plots, run:
 

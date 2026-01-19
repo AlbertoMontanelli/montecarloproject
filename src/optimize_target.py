@@ -56,6 +56,7 @@ def compute_window_counts(h, m0, sigma, nsig=2.0):
     -------
     out : dict
         Keys:
+
         - n : float
             Integral in the window.
         - err : float
@@ -591,6 +592,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
       window.
     - Signal (S), background (B), and significance (Z) for pi0 and eta
       in the window.
+
     Use Poisson bootstrap to estimate uncertainties on S, B, Z, and
     sigma.
 
@@ -607,6 +609,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
     -------
     results : dict
         Keys:
+
         - L_values : array of float
         - eff_pi0, eff_eta, eff_bkg : array of float
             Reconstruction efficiencies.

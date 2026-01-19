@@ -125,12 +125,13 @@ histograms, normalized m(gg) spectra overlays, and the scan results.</p>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><p><strong>out</strong> (<em>dict</em>) – Keys:
-- n : float</p>
-<blockquote>
-<div><p>Integral in the window.</p>
-</div></blockquote>
+<dd class="field-even"><p><p><strong>out</strong> (<em>dict</em>) – Keys:</p>
 <ul class="simple">
+<li><dl class="simple">
+<dt>n<span class="classifier">float</span></dt><dd><p>Integral in the window.</p>
+</dd>
+</dl>
+</li>
 <li><dl class="simple">
 <dt>err<span class="classifier">float</span></dt><dd><p>Statistical uncertainty from Sumw2.</p>
 </dd>
@@ -284,13 +285,14 @@ sigma.</p>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><p><strong>results</strong> (<em>dict</em>) – Keys:
-- L_values : array of float
-- eff_pi0, eff_eta, eff_bkg : array of float</p>
-<blockquote>
-<div><p>Reconstruction efficiencies.</p>
-</div></blockquote>
+<dd class="field-even"><p><p><strong>results</strong> (<em>dict</em>) – Keys:</p>
 <ul class="simple">
+<li><p>L_values : array of float</p></li>
+<li><dl class="simple">
+<dt>eff_pi0, eff_eta, eff_bkg<span class="classifier">array of float</span></dt><dd><p>Reconstruction efficiencies.</p>
+</dd>
+</dl>
+</li>
 <li><dl class="simple">
 <dt>S_pi0, B_pi0, Z_pi0<span class="classifier">array of float</span></dt><dd><p>Metrics for pi0.</p>
 </dd>
