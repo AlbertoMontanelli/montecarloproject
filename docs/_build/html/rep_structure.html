@@ -144,15 +144,6 @@ the documentation remain consistent across updates.</p>
 <hr class="docutils"/>
 <section id="continuous-integration-ci">
 <h2>Continuous Integration (CI)<a class="headerlink" href="#continuous-integration-ci" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#continuous-integration-ci'"><span>#</span></a></h2>
-<p>The repository includes <strong>two GitHub Actions workflows</strong> under <code class="docutils literal notranslate"><span class="pre">.github/workflows/</span></code>:</p>
-<section id="tests-yml">
-<h3><code class="docutils literal notranslate"><span class="pre">tests.yml</span></code><a class="headerlink" href="#tests-yml" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#tests-yml'"><span>#</span></a></h3>
-<ul class="simple">
-<li><p>Runs on every <code class="docutils literal notranslate"><span class="pre">push</span></code> or <code class="docutils literal notranslate"><span class="pre">pull_request</span></code>.</p></li>
-<li><p>Creates a Conda environment and installs the package in editable mode.</p></li>
-<li><p>Executes all <strong>unittest</strong> test suites to verify that the codebase remains stable.</p></li>
-</ul>
-</section>
 <section id="docs-yml">
 <h3><code class="docutils literal notranslate"><span class="pre">docs.yml</span></code><a class="headerlink" href="#docs-yml" title="Link to this heading" x-intersect.margin.0%.0%.-70%.0%="activeSection = '#docs-yml'"><span>#</span></a></h3>
 <ul class="simple">
@@ -170,7 +161,6 @@ the documentation remain consistent across updates.</p>
 <ul>
 <li><a :data-current="activeSection === '#directory-layout'" class="reference internal" href="#directory-layout">Directory Layout</a></li>
 <li><a :data-current="activeSection === '#continuous-integration-ci'" class="reference internal" href="#continuous-integration-ci">Continuous Integration (CI)</a><ul>
-<li><a :data-current="activeSection === '#tests-yml'" class="reference internal" href="#tests-yml"><code class="docutils literal notranslate"><span class="pre">tests.yml</span></code></a></li>
 <li><a :data-current="activeSection === '#docs-yml'" class="reference internal" href="#docs-yml"><code class="docutils literal notranslate"><span class="pre">docs.yml</span></code></a></li>
 </ul>
 </li>

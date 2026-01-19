@@ -20,9 +20,6 @@ performance, given a fixed detector model.
 
 ## Quick start
 
-> The exact CLI options may differ depending on your local version.
-> Run `python <script>.py --help` to see the available flags.
-
 ### 1) Generate events for single/multiple target thickness
 
 Example:

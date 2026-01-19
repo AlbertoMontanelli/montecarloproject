@@ -46,14 +46,6 @@ montecarloproject/
 
 ## Continuous Integration (CI)
 
-The repository includes **two GitHub Actions workflows** under `.github/workflows/`:
-
-### `tests.yml`
-
-- Runs on every `push` or `pull_request`.
-- Creates a Conda environment and installs the package in editable mode.
-- Executes all **unittest** test suites to verify that the codebase remains stable.
-
 ### `docs.yml`
 
 - Builds the Sphinx documentation using `myst-parser` and `sphinxawesome-theme`.
