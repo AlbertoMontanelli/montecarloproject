@@ -21,7 +21,7 @@ L-dependence via:
 import numpy as np
 
 # Radiation length of polyethylene
-X0 = 4.7736 / 0.93  # cm
+X0 = 50.31  # cm
 
 # Use a simple high-energy approximation for pair production length
 LAMBDA_PAIR = (9.0 / 7.0) * X0
@@ -384,12 +384,8 @@ def detect_two_photons(
 
     # ---------- measurement+smearing----------
     if en_material_smearing or xy_material_smearing:
-        path_length_1 = photon_exit_length_cm(
-            g1_lab, z_vtx_cm, L_cm, R_tgt_cm
-        )
-        path_length_2 = photon_exit_length_cm(
-            g2_lab, z_vtx_cm, L_cm, R_tgt_cm
-        )
+        path_length_1 = photon_exit_length_cm(g1_lab, z_vtx_cm, L_cm, R_tgt_cm)
+        path_length_2 = photon_exit_length_cm(g2_lab, z_vtx_cm, L_cm, R_tgt_cm)
 
     E1_meas = smear_energy(
         rng,

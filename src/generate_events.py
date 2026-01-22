@@ -16,10 +16,9 @@ import json
 
 import numpy as np
 import ROOT
-from loguru import logger
-
 from detector import detect_two_photons
 from kinematics import generate_event_from_t
+from loguru import logger
 from scattering import (
     DATA_DIR,
     CrossSections,
@@ -386,9 +385,7 @@ def save_histograms(
         [results_pi0, results_eta, results_bkg], ["pi0", "eta", "bkg"]
     ):
         dir = DATA_DIR / (
-            f"metadata_{name}_{suffix}.json"
-            if suffix
-            else f"metadata_{name}.json"
+            f"metadata_{name}_{suffix}.json" if suffix else f"metadata_{name}.json"
         )
         with open(dir, "w") as f:
             json.dump(results, f, indent=2)
@@ -460,7 +457,7 @@ def main():
         "--L_values",
         nargs="+",
         type=float,
-        default=np.linspace(0.5, 20.5, 21),
+        default=np.linspace(2, 82, 21),
         help="List of target thickness values to simulate (cm).",
     )
     parser.add_argument(
@@ -469,8 +466,7 @@ def main():
         type=float,
         default=None,
         help=(
-            "If set, override L_values with a linspace from Lmin to Lmax with"
-            "N points."
+            "If set, override L_values with a linspace from Lmin to Lmax withN points."
         ),
     )
 

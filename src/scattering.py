@@ -53,7 +53,7 @@ class CrossSections:
 
     # --- Material properties ---
     DENSITY_G_CM3 = 0.93
-    MOLAR_MASS = 16.0
+    MOLAR_MASS = 14.0
     NR_PROTONS = 2.0
 
     @staticmethod
@@ -245,7 +245,7 @@ def plot_accepted_mc_vs_expected(results, n_events):
     plt.plot(
         x,
         n_events * expected_prob(x),
-        label=(r"Interaction counts expected: $1-e^{-\frac{L}{\lambda}}$"),
+        label=(r"Interaction counts expected: $N(1-e^{-\frac{L}{\lambda}})$"),
     )
 
     ax = plt.gca()
@@ -318,7 +318,7 @@ def plot_linearity(results, n_events):
         n_events * (x / lam),
         label=(
             "Interaction counts expected (linear approx):"
-            r" $\frac{L}{\lambda}$"
+            r" $N(\frac{L}{\lambda})$"
         ),
     )
 
@@ -508,16 +508,12 @@ def plot_depth_histogram(rng, L_cm, n_samples, n_bins):
             [],
             [],
             color="none",
-            label=(
-                rf"$L = \lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = {n_samples}$"
-            ),
+            label=(rf"$L = \lambda= {lam:.0f}\,\mathrm{{cm}}$, $N = {n_samples}$"),
         )
     ]
     plt.xlabel("First interaction depth $x$ [cm]")
     plt.ylabel("Probability density")
-    plt.title(
-        "First interaction sampled depth $x$ distribution: MC vs expected"
-    )
+    plt.title("First interaction sampled depth $x$ distribution: MC vs expected")
     handles, labels = plt.gca().get_legend_handles_labels()
     plt.legend(
         handles + extra_line,

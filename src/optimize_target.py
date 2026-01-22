@@ -17,9 +17,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import ROOT
-from loguru import logger
-
 from kinematics import M_ETA, M_PI0
+from loguru import logger
 from scattering import DATA_DIR, PLOT_DIR
 
 # Update matplotlib.pyplot parameters.
@@ -91,9 +90,7 @@ def compute_window_counts(h, m0, sigma, nsig=2.0):
     }
 
 
-def fit_meson_peak(
-    h, m_meson, L, k_range=2, n_iter=2, do_plot=False, suffix=None
-):
+def fit_meson_peak(h, m_meson, L, k_range=2, n_iter=2, do_plot=False, suffix=None):
     """
     Fit the meson peak and plot the results.
 
@@ -290,7 +287,7 @@ def make_poisson_bootstrap_hist(h, rng):
     return h_boot
 
 
-def compute_significance(S, B, kind="asymptotic"):
+def compute_significance(S, B, kind="simple"):
     """
     Compute significance from expected signal/background yields.
 
@@ -435,9 +432,7 @@ def plot_oversampled_background(suffix=None):
         xax = h_bkg.GetXaxis()
         xmin = xax.GetXmin()
         xmax = xax.GetXmax()
-        axis_mev = ROOT.TGaxis(
-            xmin, 0, xmax, 0, xmin * 1e3, xmax * 1e3, 510, "S"
-        )
+        axis_mev = ROOT.TGaxis(xmin, 0, xmax, 0, xmin * 1e3, xmax * 1e3, 510, "S")
         axis_mev.SetTitle("m_{#gamma#gamma} [MeV]")
         axis_mev.SetLabelFont(42)
         axis_mev.SetTitleFont(42)
@@ -556,9 +551,7 @@ def plot_normalized_histograms(suffix=None, logy=False):
         xax = h_bkg.GetXaxis()
         xmin = xax.GetXmin()
         xmax = xax.GetXmax()
-        axis_mev = ROOT.TGaxis(
-            xmin, 0, xmax, 0, xmin * 1e3, xmax * 1e3, 510, "S"
-        )
+        axis_mev = ROOT.TGaxis(xmin, 0, xmax, 0, xmin * 1e3, xmax * 1e3, 510, "S")
         axis_mev.SetTitle("m_{#gamma#gamma} [MeV]")
         axis_mev.SetLabelFont(42)
         axis_mev.SetTitleFont(42)
@@ -622,9 +615,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
         - sigma_eta, sigma_eta_err : array of float
             Mass resolution and uncertainty for eta (MeV).
     """
-    histogram_list, meta_bkg, meta_pi0, meta_eta = load_histograms(
-        suffix=suffix
-    )
+    histogram_list, meta_bkg, meta_pi0, meta_eta = load_histograms(suffix=suffix)
     L_values = [item["L_cm"] for item in meta_bkg]
 
     eff_pi0 = []
@@ -661,11 +652,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
             sigma0 = fit_meson["sigma"]
 
             # Create weighted histogram for signal and background
-            w_sig = (
-                meta_pi0[i]["w_phys"]
-                if meson == "pi0"
-                else meta_eta[i]["w_phys"]
-            )
+            w_sig = meta_pi0[i]["w_phys"] if meson == "pi0" else meta_eta[i]["w_phys"]
             w_bkg = meta_bkg[i]["w_phys"]
 
             # Count events in adaptive window +/- nsig*sigma
@@ -680,7 +667,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
             S0 = w_sig * S0_raw
             B0 = w_bkg * B0_raw
 
-            Z0 = compute_significance(S0, B0, kind="asymptotic")
+            Z0 = compute_significance(S0, B0)
 
             # --- Bootstrap ---
             sigma_boot_err = 0.0
@@ -730,9 +717,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
                     N_fail += 1
                     continue
 
-                Z_bootstrap = compute_significance(
-                    S_bootstrap, B_bootstrap, kind="asymptotic"
-                )
+                Z_bootstrap = compute_significance(S_bootstrap, B_bootstrap)
 
                 sigma_list.append(sigma_bootstrap)
                 Z_list.append(Z_bootstrap)
@@ -796,11 +781,7 @@ def scan_target_length(suffix=None, rng=None, n_boot=100):
         "sigma_eta": sigma_eta,
         "sigma_eta_err": sigma_eta_err,
     }
-    dir = (
-        DATA_DIR / f"metrics_{suffix}.json"
-        if suffix
-        else DATA_DIR / "metrics.json"
-    )
+    dir = DATA_DIR / f"metrics_{suffix}.json" if suffix else DATA_DIR / "metrics.json"
     with open(dir, "w") as f:
         json.dump(results, f, indent=2)
 
@@ -824,11 +805,7 @@ def plot_significance(meson="pi0", suffix=None):
         Optional suffix for output files.
 
     """
-    dir = (
-        DATA_DIR / f"metrics_{suffix}.json"
-        if suffix
-        else DATA_DIR / "metrics.json"
-    )
+    dir = DATA_DIR / f"metrics_{suffix}.json" if suffix else DATA_DIR / "metrics.json"
     results = json.load(open(dir))
     meson_name = r"$\pi^{0}$" if meson == "pi0" else r"$\eta$"
 
@@ -857,21 +834,13 @@ def plot_significance(meson="pi0", suffix=None):
         yerr=Z_err,
         fmt="o",
         color="blue",
-        label=r"$Z(L)=$"
-        r"$\sqrt{2\left[(S+B)\log\left(1+ \frac{S}{B}\right)-S\right]}$",
+        label=r"$Z(L)=\frac{S}{\sqrt{S+B}} \pm$ Poisson bootstrap std. dev.",
         markersize=4,
         capsize=3,
         elinewidth=1,
     )
-    ax1.plot([], [], " ", label="Errors: Poisson bootstrap std. dev.")
     ax1.grid(True)
     ax1.legend()
-    # Reorder legend to put errors last
-    handles, labels = ax1.get_legend_handles_labels()
-    idx = labels.index("Errors: Poisson bootstrap std. dev.")
-    handles.append(handles.pop(idx))
-    labels.append(labels.pop(idx))
-    ax1.legend(handles, labels)
 
     # Panel 2: S and B (L)
     ax2.tick_params(labelbottom=False)
@@ -929,9 +898,7 @@ def plot_significance(meson="pi0", suffix=None):
     ax3.legend()
 
     dir = PLOT_DIR / (
-        f"significance_{meson}_{suffix}.pdf"
-        if suffix
-        else f"significance_{meson}.pdf"
+        f"significance_{meson}_{suffix}.pdf" if suffix else f"significance_{meson}.pdf"
     )
     fig.savefig(dir, dpi=1200)
 
@@ -953,11 +920,7 @@ def plot_sigma(meson="pi0", suffix=None):
         Optional suffix for output files.
 
     """
-    dir = (
-        DATA_DIR / f"metrics_{suffix}.json"
-        if suffix
-        else DATA_DIR / "metrics.json"
-    )
+    dir = DATA_DIR / f"metrics_{suffix}.json" if suffix else DATA_DIR / "metrics.json"
     results = json.load(open(dir))
     meson_name = r"\pi^{0}" if meson == "pi0" else r"\eta"
 
@@ -990,9 +953,7 @@ def plot_sigma(meson="pi0", suffix=None):
     ax1.legend()
 
     ax2.set_xlabel("Target thickness L [cm]")
-    N_gen_meson = (
-        results["N_gen_pi0"] if meson == "pi0" else results["N_gen_eta"]
-    )
+    N_gen_meson = results["N_gen_pi0"] if meson == "pi0" else results["N_gen_eta"]
     N_gen_bkg = results["N_gen_bkg"]
     err_bin_meson = np.sqrt((eff_meson * (1.0 - eff_meson)) / N_gen_meson)
     err_bin_bkg = np.sqrt((eff_bkg * (1.0 - eff_bkg)) / N_gen_bkg)
@@ -1022,9 +983,7 @@ def plot_sigma(meson="pi0", suffix=None):
     ax2.grid(True)
     ax2.legend()
 
-    dir = PLOT_DIR / (
-        f"sigma_{meson}_{suffix}.pdf" if suffix else f"sigma_{meson}.pdf"
-    )
+    dir = PLOT_DIR / (f"sigma_{meson}_{suffix}.pdf" if suffix else f"sigma_{meson}.pdf")
     fig.savefig(dir, dpi=1200)
 
 
